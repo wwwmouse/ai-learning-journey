@@ -56,8 +56,9 @@ arr2=np.array(a) #传入列表a，此时arr2是一个一维数组
 arr3=np.array(a,dtype=float)
 #print(arr3)结果为[1. 2. 3.]，因为我们用dtype强行指定了数据类型为float
 ```
-在初始化ndarray时,第一个参数为**object：要转换成数组的数据（列表，元组等）**
-第二个参数为**dtype：在这里用于指定数据类型，和之前的属性同名**
+在初始化ndarray时
+- 第一个参数为**object：要转换成数组的数据（列表，元组等）**
+- 第二个参数为**dtype：指定数据类型，和之前的属性同名**
 
 
 
