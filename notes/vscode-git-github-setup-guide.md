@@ -95,40 +95,59 @@ git config user.email
 在仓库根目录创建 `.gitignore` 文件：
 
 ```gitignore
-# VS Code 配置
+# === IDE & Editor ===
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Python 缓存
+# === Python ===
 __pycache__/
 *.py[cod]
 *$py.class
-
-# 虚拟环境
+*.so
+.Python
 env/
 venv/
 ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# 数据集（体积大，不该进 Git）
+# === Jupyter ===
+.ipynb_checkpoints
+
+# === Data & Models ===
 data/
+datasets/
 *.tar.gz
-
-# 模型文件
+*.zip
 *.pth
 *.pt
 *.h5
 *.onnx
 
-# Jupyter Notebook 检查点
-.ipynb_checkpoints
+# === Logs & Temp ===
+*.log
+*.tmp
+*.bak
 
-# 操作系统文件
+# === OS ===
 .DS_Store
 Thumbs.db
-
-# 个人练习文件（可选）
-try code_c/
-try code_cpp/
-try code_py/
 ```
 
 ### 提交 .gitignore
