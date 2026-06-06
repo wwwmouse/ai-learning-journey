@@ -396,21 +396,25 @@ print(scores.sum(axis=0))
 ```
 
 ##### 2. 均值
+
 ```bash
 # 全班平均分
 print(scores.mean())          
 # 89.0
 
-# 每个学生的平均分
-print(scores.mean(axis=1))    
+# 每个学生的平均分、中位数
+print(scores.mean(axis=1)) 
+print(np.median(scores,axis=1))   
+
 # [86.25 87.0  88.75]
+# [87.5 88.5 89. ]
 
 # 每科的平均分
 print(scores.mean(axis=0))    
 # [88.33 84.67 86.0  90.33]
 ```
 
-3. 最高/最低分
+##### 3. 最高/最低分
   
 ```bash
 # 最高分
@@ -427,4 +431,16 @@ print(scores.min(axis=1))
 # [78 76 85]
 # [92 90 95 92]
 ```
+
+##### 4.标准差、方差
+```bash
+print(np.round(scores.std(axis=0),2))
+print(np.round(scores.var(axis=1),2))
+# [2.87 6.18 6.98 1.25]                          
+# [29.19 47.5   6.69] 
+```
+- 显然，常用的**求和、平均数、标准差和方差**作为**数组对象**方法直接使用
+`scores.sum() scores.mean() scores.std`
+- 而不太常用的**中位数**需要调用np.median()函数
+`np.median(scores)`
 
