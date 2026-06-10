@@ -445,9 +445,9 @@ df['性别'] = df['性别'].astype('category')
 print(df['性别'].dtype)  # category
  # 约 50KB，省 8 倍内存
 ```
-##### 3.2.3.4 pd_to_datetime() 日期转换
+##### 3.2.3.4 pd.to_datetime() 日期转换
 日期格式众多，写法各异，单纯用字符串储存难以统一格式与共同处理
-pd_to_datetime()可将各种格式的日期字符串统一转为datetime类型
+pd.to_datetime()可将各种格式的日期字符串统一转为datetime类型
 
 | 参数          | 作用             | 示例                     |
 | ----------- | -------------- | ---------------------- |
@@ -469,8 +469,7 @@ pd.to_datetime(dates)
 ```
 
 #### 3.2.4数据变形
-数据变形（Data Reshaping）是 pandas 中从**"宽表"和"长表"之间转换**的操作
-核心主要三个函数：melt、pivot、pivot_table
+数据变形（Data Reshaping）是 pandas 中**多表关联和高维变换**的操作
 
 宽表：一列一个变量，适合阅读、作为最终展示格式
 | 姓名 | 语文 | 数学 | 英语 |
@@ -551,3 +550,93 @@ print(df_wide_back)
 # 0   张三    85      88      90
 # 1   李四    92      80      78
 ```
+##### 3.2.4.3 轴向拼接:concat
+沿着行/列将多个DataFrame简单拼接在一起
+**不关心逻辑关联等问题，只注重对齐**
+
+| 参数             | 作用    | 常用值       |
+| --------------   | ------ | ------------- |
+| `objs`         | 要拼接的**列表** of DataFrames | `[df1, df2, df3]`   |
+| `axis`         | 拼接方向    | `0`（纵向，默认）/`1`（横向）                      |
+| `ignore_index` | 是否重置行索 | `False`（默认）/`True` |
+| `join`         | 列对齐方式    | `'outer'`（并集，默认）/`'inner'`（交集）          |
+
+**参数ignore_index=True 用来对新df重新生成连续的自动索引，防止原先两个df的索引混合**
+这一操作很常用，通常情况下**对于行拼接**建议习惯性带上`ignore_index=True`
+
+```python
+df1 = pd.DataFrame({'A': ['A0', 'A1'], 'B': ['B0', 'B1']}, index=[0, 1])
+df2 = pd.DataFrame({'A': ['A2', 'A3'], 'B': ['B2', 'B3']}, index=[2, 3]) # 列名相同
+df3 = pd.DataFrame({'C': ['C0', 'C1'], 'D': ['D0', 'D1']}, index=[0, 1]) # 列名不同
+
+# 【操作一】纵向拼接 (axis=0，默认值) —— 往下方加行
+result_v = pd.concat([df1, df2], axis=0, ignore_index=True)
+print(result_v)
+#     A   B
+# 0  A0  B0
+# 1  A1  B1
+# 2  A2  B2
+# 3  A3  B3
+
+# 【操作二】横向拼接 (axis=1) —— 往右侧加列
+result_h = pd.concat([df1, df3], axis=1)
+print(result_h)
+#     A   B   C   D
+# 0  A0  B0  C0  B0
+# 1  A1  B1  C1  B1
+
+```
+
+##### 3.2.4.4 主键关联:merge
+
+通过**一个或多个共同的列（关联键）**，把两张不同的表**横向**关联起来
+靠内容去匹配，比concat更优雅
+
+| 参数                     | 作用             | 示例                                 |
+| ---------------------- | -------------- | ---------------------------------- |
+| `left`                 | 左表             | `df_users`                         |
+| `right`                | 右表             | `df_orders`                        |
+| `on`                   | **两表共同的关联键列名** | `on='user_id'` |
+| `left_on` / `right_on` | 关联键列名**不同**时使用 | `left_on='id', right_on='user_id'` |
+| `how`                  | 连接方式                | `how='left'`
+| `suffixes`             | 重名列的后缀         | `suffixes=('_jan', '_feb')`        |
+
+**how参数对应的连接方式很重要**
+以这个具体例子说明
+```python
+df1 = pd.DataFrame({'ID': [1, 2, 3], 'Name': ['A', 'B', 'C']})
+df2 = pd.DataFrame({'ID': [2, 3, 4], 'Score': [88, 92, 80]})
+print(pd.merge(df1,df2,on="ID",how=" ").ID)
+```
+|       how      |      代码      |      结果       |      说明            |
+| :-----------: | ------------- | -------------- | -------------------- |
+| **inner**（默认） | `how='inner'` | ID: 2, 3    | **交集**：只保留两表都有的 ID   |
+|    **left**   | `how='left'`  | ID: 1, 2, 3    | 以左表为准，右表缺的补 NaN      |
+|   **right**   | `how='right'` | ID: 2, 3, 4    | 以右表为准，左表缺的补 NaN      |
+|   **outer**   | `how='outer'` | ID: 1, 2, 3, 4 | **并集**：两边全保留，缺的补 NaN |
+
+放个实际例子感受merge关联作用
+有点类似于map的键值对，**按照how指定的方式，根据的key把values合并**
+
+```python
+df_imgs = pd.DataFrame({'image_path': ['img_001.jpg', 'img_002.jpg'], 'label_id': [3, 0]})
+df_labels = pd.DataFrame({'label_id': [0, 1, 2, 3], 'label_name': ['airplane', 'automobile', 'bird', 'cat']})
+
+df_final = pd.merge(df_imgs, df_labels, on='label_id', how='left')
+#通过label_id列的关联键[3,0]，将两张表进行左表全保留的拼接
+
+print(df_final)
+#    image_path  label_id label_name
+# 0  img_001.jpg         3        cat
+# 1  img_002.jpg         0   airplane
+```
+
+##### 3.2.4.5 concat,merge选择
+| 场景                    | 选择                | 原因                |
+| :-------------------- | :------------------ | :---------------- |
+| 两表有**关联键**（用户ID、订单号等） | `merge`             | 按键值匹配，类似 SQL JOIN |
+| 多表**结构相同**，追加行        | `concat(axis=0)`    | 简单堆叠，如按月分表合并      |
+| 多表**结构不同**，追加列        | `concat(axis=1)`    | 横向拼接，注意索引对齐       |
+| 需要**聚合去重**后再合并        | `merge` + `groupby` | concat 不处理重复      |
+
+#### 分组聚合
