@@ -47,7 +47,6 @@ Thumbs.db
 *.onnx
 
 # Personal algorithm practice (not part of AI learning)
-try code_c/
-try code_cpp/
-try code_py/
-project_system/
+Algorithm
+project_system
+others
