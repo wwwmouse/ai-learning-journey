@@ -24,7 +24,7 @@ print(f"气温超过30摄氏度有{high.size}天")
 某班级5名学生数学成绩为[85,90,78,92,88]
 计算成绩平均分，中位数，标准差
 
-```bash
+```python
 scores=np.array([85,90,78,92,88])
 print(f"平均分为{round(scores.mean(),2)}")
 print(f"中位数为{round(np.median(scores),2)}")
@@ -39,7 +39,7 @@ print(f"标准差为{round(scores.std(),3)}")
 计算A+B和A*B（逐元素乘积）
 计算A@B（矩阵乘积）
 
-```bash
+```python
 A=np.array([[1,2],[3,4]])
 B=np.array([[5,6],[7,8]])
 print(A+B)
@@ -61,7 +61,7 @@ print(A@B)
 计算每列的最大值和每行的最小值
 将数组中的所有奇数替换成-1
 
-```bash
+```python
 arr=np.random.randint(0,10,(3,4))
 print(arr)
 print(arr.max(axis=0))
@@ -91,7 +91,7 @@ print(arr)
 创建一个1到12的一维数组，并转换为(3,4)的二维数组
 计算每行的和与每列的平均值
 将数组展平为一维数组
-```bash
+```python
 arr=np.array([1,2,3,4,5,6,7,8,9,10,11,12])
 arr1=np.reshape(arr,(3,4)) #reshape改变新数组，原数组不动
 print(f"列平均值：{round(arr.mean(axis=0),2)}")
@@ -110,7 +110,7 @@ print(f"一维数组：{arr1.flatten()}")
 生成一个(5,5)的随机数组，范围[0,20)
 找出数组中大于10的元素
 将所有大于10的元素替换为0
-```bash
+```python
 arr=np.random.randint(0,20,(5,5))
 print(arr)
 print(arr[arr>10])
@@ -134,7 +134,7 @@ print(arr)
 某公司6个月的销售额（万元）为[120,135,110,125,130,140]
 计算销售额的总和，均值和方差
 找出销售额最高的月份和最低的月份
-```bash
+```python
 prices=np.array([120,135,110,125,130,140])
 print(f"销售总和：{prices.sum()}元")
 print(f"销售均值：{round(prices.mean(),2)}元")
@@ -154,7 +154,7 @@ A=[1,2,3] B=[4,5,6]
 将A和B水平拼接
 将A和B竖直拼接
 
-```bash
+```python
 A=np.array([1,2,3])
 B=np.array([4,5,6])
 C=concatenate([A,B])
@@ -171,7 +171,7 @@ print(np.reshape(C,(2,3)))
 计算每天的利润
 计算利润的平均值和标准差
 找出利润最高的天数
-```bash
+```python
 sale=np.array([20,25,22,30,28])
 cost=np.array([15,18,16,22,20])
 profit=sale-cost

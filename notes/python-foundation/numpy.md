@@ -14,7 +14,7 @@ numpy中的数据结构，类似C语言的数组
 ### 1.2.1 特性
 
 - 多维性：支持0维（标量）、1维（向量）、2维（矩阵）以及更高
-```bash
+```python
 import numpy as np
 arr=np.array(3) #创立0维的ndarray数组
 print(arr)
@@ -25,7 +25,7 @@ print(arr2)
 print(arr.ndim)
 ```
 - 同质性：内存元素的类型必须一致
-```bash
+```python
 a=np.array([1,"Have a nice day!^^"]) #int string
 print(a)
 ```
@@ -48,7 +48,7 @@ print(a)
 ### 1.2.2 创建
 
 #### 1.2.2.1 基础构造
-```bash
+```python
 import numpy as np
 arr1=np.array(5) #创造一个0维数组，元素只有5
 
@@ -70,7 +70,7 @@ arr5=arr1.copy()
 1. 若参数数组类型不为object，则**深拷贝**整个数组，完全独立
 2. 若为object，则只**浅拷贝**数组外壳，仅复制整个数组的指针，不复制对象，内部数值共享！
    因此对于object类型的数组，其内部的**可变对象**(list,dict,set)与复制的新数组共享，
-```bash
+```python
 # 数值数组：深拷贝，完全独立
 a = np.array([1, 2, 3])
 b = np.copy(a)
@@ -93,14 +93,14 @@ a[0].append(99)对object数组内部的inner指针所指对象进行修改
 #### 1.2.2.2 预定义形状
 大致分为4种，全0、全1、未初始化、固定值
 1. 全0
-```bash
+```python
 arr=np.zeros((2,3))#数组形状
 print(arr)
 print(arr.ndim)# 2
 print(arr.shape)# (2,3)
 ```
 2. 全1
-```bash
+```python
 #基本同上，没啥说的
 arr1=np.ones((2,3,5))
 print(arr1)
@@ -109,7 +109,7 @@ print(arr1.shape)# (2,3,5)
 #注意一下全0/1数组数据类型默认float
 ```
 3. 未初始化，效率更快
-```bash
+```python
 arr2=np.empty((2,3)) #里面的值为内存残留值，在性能敏感场景是推荐用法
 ```
 
@@ -125,7 +125,7 @@ arr3=np.full((3,5),520)#两个参数，形状和填充值
 |np.arange(start,stop,step)|按照给定步长step生成**等差数列**|[start,stop)|等差d=step|
 |np.linspace(start,stop,num)|按照给定个数num生成**等间隔数列**|[start,stop]|生成的数等分区间]
 |np.logspace(start,stop,num,base)|生成从base^start到base^stop的num个**指数等间隔的幂**|[start,stop]|底数默认10|
-```bash
+```python
 #等差数列
 arr1=np.arange(1,10,2)
 # [1 3 5 7 9]
@@ -145,7 +145,7 @@ arr3=np.logspace(0,10,6)#base未赋值默认10
 |np.eye(n)|生成n*n单位矩阵|
 |np.diag(arr)|用一维数组创建对角矩阵|
 
-```bash
+```python
 arr1=np.eye(3)
 a=[1,2,3]
 arr2=np.diag(a)
@@ -183,7 +183,7 @@ print(arr2)
 |花式索引|整数数组选元素|arr[ [0,2,4] ]|
 
 #### 1.2.4.1 一维数组
-```bash
+```python
 arr=np.random.randint(1,100,15)
 print(arr)
 print(arr[0])
@@ -204,7 +204,7 @@ print(arr[[1,3,5]]) #花式索引，筛选指定元素为数组
 
 #### 1.2.4.2二维数组
 和一维数组大同小异，注意选清楚行列即可
-```bash
+```python
 arr=np.random.randint(1,100,(5,5))
 print(arr)
 print(arr[1,1])
@@ -237,7 +237,7 @@ print(arr[3,:]) #与arr[3]等价
 
 
 1. 根据某行筛选列
-```bash
+```python
 mask = arr[0, :] > 50   # 第1行中，值大于50的那些列
 print(arr[:, mask])
 ```
@@ -355,7 +355,7 @@ c=np.ones((1, 5, 1))
 
 #### 1.2.6.1 展平成一维
 通常用于在画直方图前展平数据
-```bash
+```python
 print(arr)
 print(arr.flatten())
 # [[1]                                           
@@ -366,7 +366,7 @@ print(arr.flatten())
 
 #### 1.2.6.2 统计函数
 我们以一个三名学生四门科目的实际例子来理解统计函数
-```bash
+```python
 import numpy as np
 scores = np.array([
     [85, 90, 78, 92],   # 学生A
@@ -382,7 +382,7 @@ scores = np.array([
 ==0时按列求和
 下面其他函数中同理
 
-```bash
+```python
 # 总分
 print(scores.sum())    
 # 1068  所有人所有科目总分
@@ -398,7 +398,7 @@ print(scores.sum(axis=0))
 
 ##### 1.2.6.2.2 均值
 
-```bash
+```python
 # 全班平均分
 print(scores.mean())          
 # 89.0
@@ -417,7 +417,7 @@ print(scores.mean(axis=0))
 
 ##### 1.2.6.2.3 最高/最低分
   
-```bash
+```python
 # 最高分
 print(scores.max())           
 # 95
@@ -434,7 +434,7 @@ print(scores.min(axis=1))
 ```
 
 ##### 1.2.6.2.4标准差、方差
-```bash
+```python
 print(np.round(scores.std(axis=0),2))
 print(np.round(scores.var(axis=1),2))
 # [2.87 6.18 6.98 1.25]                          

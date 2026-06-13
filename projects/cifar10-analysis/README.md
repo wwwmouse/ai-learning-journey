@@ -20,14 +20,14 @@
 
 ## 运行方法
 ### 安装依赖
-```bash
+```python
 pip install -r requirements.txt
 ```
 - 安装上述的所有第三方库
 
 ### 运行脚本
    
-```bash
+```python
 python cifar10_analysis.py
 ```
 
