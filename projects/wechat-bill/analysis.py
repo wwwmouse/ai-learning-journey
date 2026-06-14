@@ -3,6 +3,18 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
+def save_chart(filename):
+    """保存图表到 results-pictures 文件夹"""
+    base_dir = os.path.dirname(__file__)
+    save_dir = os.path.join(base_dir, 'results-pictures')
+    os.makedirs(save_dir, exist_ok=True)
+    
+    plt.savefig(
+        os.path.join(save_dir, filename),
+        dpi=300,
+        bbox_inches='tight'
+    )
+
 from matplotlib import rcParams
 rcParams['font.family']= 'SimHei'
 #windows处理中文
@@ -19,10 +31,10 @@ del preview #手动释放
 
 datas = pd.read_excel('projects\wechat-bill\datas.xlsx', header=header_row)#从列索引那一行开始读
 
-print(datas.isna().sum())
+# print(datas.isna().sum())
 # 空白检查，确认每列都没有空的
 
-print(datas.duplicated().sum())
+# print(datas.duplicated().sum())
 # 重复检查，确认没重复内容
 
 datas['交易年月']=datas['交易时间'].dt.to_period('M')
@@ -77,7 +89,7 @@ plt.plot(
     linewidth=2
 )
 
-plt.title('2025-09至2026-05资金流动',fontsize=20,color='black')
+plt.title('月度收支趋势图',fontsize=20,color='black')
 
 plt.xlabel('时间',fontsize=15,color='black')
 plt.ylabel('金额',fontsize=15,color='black',rotation=0)#让纵轴标题水平过来
@@ -98,6 +110,42 @@ for x,y in enumerate(income):
              bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='red', alpha=0.8))
     
 plt.tight_layout()
-plt.savefig(os.path.join(os.path.dirname(__file__), '资金流动图.png'), dpi=300, bbox_inches='tight')
+save_chart("月度收支趋势图.png")
 plt.show()
 
+# 2.绘制交易时间条形图
+datas['交易小时']=datas['交易时间'].dt.hour
+datash=datas.groupby("交易小时")["金额(元)"].sum()
+
+# 补齐0-23小时，没有的填0
+datash = datash.reindex(range(24), fill_value=0)
+
+datash=datash.reset_index()
+
+print(datash)
+print(f"交易金额最大的小时:{datash.iloc[datash['金额(元)'].idxmax(),0]}")
+print(f"交易金额：{round(datash['金额(元)'].max(),2)}")
+
+day_hours=datash["交易小时"]
+day_money=datash["金额(元)"].round(2)
+
+colors = ['#2c3e50' if h < 6 else    # 凌晨深蓝
+          '#f39c12' if h < 12 else   # 上午橙色
+          '#27ae60' if h < 18 else   # 下午绿色
+          '#e74c3c' for h in day_hours]  # 晚上红色
+
+plt.bar(day_hours, day_money, color=colors, width=0.5)
+
+plt.title("消费时段分布图",fontsize=20,color="red")
+plt.xlabel("小时",fontsize=10,color="black")
+plt.ylabel("金额",fontsize=10,color="black",rotation=0)
+
+plt.grid(True, axis='y', alpha=0.6, color="gray")
+
+
+for x,y in enumerate(day_money):
+     plt.text(x,y,str(y),ha="center",va="bottom",fontsize=10,color='black')
+     
+plt.tight_layout()
+save_chart("消费时段分布图.png")
+plt.show()
