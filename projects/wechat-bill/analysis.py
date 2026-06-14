@@ -47,6 +47,7 @@ print(datasm)
 
 datasm_w=datasm.pivot(index='交易年月',columns='收/支',values='金额(元)')
 datasm_w=datasm_w.reset_index() #令交易年月从索引变为普通列，不然没法从列取时间
+datasm_w.columns.name=None
 
 print(datasm_w)
 # 长表变宽表，分开收/支
@@ -89,10 +90,12 @@ plt.grid(True,alpha=0.2,color='black')
 #添加网格线，方向、透明度、颜色
 
 for x,y in enumerate(expend):
-    plt.text(x+0.3,y+0.3,str(y),ha='center',va='bottom',fontsize=10,color='red')
+    plt.text(x+0.1,y+0.1,str(y),ha="left",va="bottom",fontsize=10,color='red',
+             bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='green', alpha=0.8))
     
 for x,y in enumerate(income):
-    plt.text(x-0.3,y-0.3,str(y),ha='center',va='bottom',fontsize=10,color='blue')
+    plt.text(x-0.1,y-0.1,str(y),ha="right",va="top",fontsize=10,color='blue',
+             bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='red', alpha=0.8))
     
 plt.tight_layout()
 plt.savefig(os.path.join(os.path.dirname(__file__), '资金流动图.png'), dpi=300, bbox_inches='tight')
