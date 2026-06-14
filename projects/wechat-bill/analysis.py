@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
@@ -14,12 +13,13 @@ def save_chart(filename):
         dpi=300,
         bbox_inches='tight'
     )
+#保存图片，封装成函数
 
 from matplotlib import rcParams
 rcParams['font.family']= 'SimHei'
 #windows处理中文
 
-preview = pd.read_excel('projects\wechat-bill\datas.xlsx', header=None, nrows=50)#先截前50行找数据起点位置
+preview = pd.read_excel('projects/wechat-bill/datas.xlsx', header=None, nrows=50)#先截前50行找数据起点位置
 
 header_row = None
 for i in range(len(preview)):
@@ -29,7 +29,7 @@ for i in range(len(preview)):
     
 del preview #手动释放
 
-datas = pd.read_excel('projects\wechat-bill\datas.xlsx', header=header_row)#从列索引那一行开始读
+datas = pd.read_excel('projects/wechat-bill/datas.xlsx', header=header_row)#从列索引那一行开始读
 
 # print(datas.isna().sum())
 # 空白检查，确认每列都没有空的
@@ -103,11 +103,11 @@ plt.grid(True,alpha=0.2,color='black')
 
 for x,y in enumerate(expend):
     plt.text(x+0.1,y+0.1,str(y),ha="left",va="bottom",fontsize=10,color='red',
-             bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='green', alpha=0.8))
+             bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='red', alpha=0.8))
     
 for x,y in enumerate(income):
     plt.text(x-0.1,y-0.1,str(y),ha="right",va="top",fontsize=10,color='blue',
-             bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='red', alpha=0.8))
+             bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='blue', alpha=0.8))
     
 plt.tight_layout()
 save_chart("月度收支趋势图.png")
@@ -144,7 +144,7 @@ plt.grid(True, axis='y', alpha=0.6, color="gray")
 
 
 for x,y in enumerate(day_money):
-     plt.text(x,y,str(y),ha="center",va="bottom",fontsize=10,color='black')
+     plt.text(x,y+max(day_money)*0.01,str(y),ha="center",va="bottom",fontsize=10,color='black')
      
 plt.tight_layout()
 save_chart("消费时段分布图.png")
