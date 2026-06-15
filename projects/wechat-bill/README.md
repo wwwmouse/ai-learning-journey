@@ -27,7 +27,8 @@ pip install -r requirements.txt
 
 ### 准备数据
 
-从微信导出账单（Excel 格式），放入 `projects/wechat-bill/` 目录，命名为 `datas.xlsx`
+1. 下载或克隆本项目
+2. 从微信导出账单（Excel 格式），放入项目根目录，命名为 `datas.xlsx`
 
 ### 运行脚本
 ```bash
