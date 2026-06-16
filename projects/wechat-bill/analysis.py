@@ -97,11 +97,12 @@ plt.plot(
 
 plt.title('月度收支趋势图',fontsize=20,color='black')
 
-plt.xlabel('时间',fontsize=15,color='black')
-plt.ylabel('金额',fontsize=15,color='black',rotation=0)#让纵轴标题水平过来
+plt.xlabel('时间',fontsize=15,color='black',labelpad=10)
+plt.ylabel('金额',fontsize=15,color='black',labelpad=15,rotation=0)#让纵轴标题水平过来
 
 plt.legend(loc='upper left')
 
+plt.yticks(rotation=45,fontsize=12)
 plt.xticks(rotation=45,fontsize=12)
 
 plt.grid(True,alpha=0.2,color='black')
@@ -155,9 +156,12 @@ colors = ['#2c3e50' if h < 6 else    # 凌晨深蓝
 
 plt.bar(day_hours, day_money, color=colors, width=0.5)
 
-plt.title("消费时段分布图",fontsize=20,color="red")
-plt.xlabel("小时",fontsize=10,color="black")
-plt.ylabel("支出",fontsize=10,color="black",rotation=0)
+plt.title("消费时段分布图",fontsize=20,color="black")
+plt.xlabel("小时",fontsize=15,color="black",labelpad=10)
+plt.ylabel("支出",fontsize=15,color="black",rotation=0,labelpad=15)
+
+plt.yticks(rotation=45,fontsize=12)
+plt.xticks(fontsize=12)
 
 plt.grid(True, axis='y', alpha=0.6, color="gray")
 
