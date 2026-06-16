@@ -163,10 +163,11 @@ plt.ylabel("支出",fontsize=15,color="black",rotation=0,labelpad=15)
 plt.yticks(rotation=45,fontsize=12)
 plt.xticks(fontsize=12)
 
+plt.ylim(0,max(day_money)+501)
 plt.grid(True, axis='y', alpha=0.6, color="gray")
 
 for x,y in enumerate(day_money):
-     plt.text(x,y,str(y),ha="center",va="bottom",fontsize=10,color='black')
+     plt.text(x,y,str(y),ha="center",va="bottom",fontsize=10,color='black',rotation=30)
      
 plt.tight_layout()
 save_chart("消费时段分布图.png")
