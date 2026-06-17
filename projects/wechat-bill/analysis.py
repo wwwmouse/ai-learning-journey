@@ -7,8 +7,8 @@ rcParams['font.family']= 'SimHei'
 # windows处理中文
 
 def save_chart(filename):
-#   保存图表到 results-pictures 文件夹
-    base_dir = os.path.dirname(__file__)
+
+#保存图表到 results-pictures 文件夹
     save_dir = os.path.join(BASE_DIR, 'results-pictures')
     os.makedirs(save_dir, exist_ok=True)
     
@@ -17,14 +17,15 @@ def save_chart(filename):
         dpi=300,
         bbox_inches='tight'
     )
-#保存图片，封装成函数
 
 
-# 代码文件所在目录（E:\VScode\wechat-bill）
+
+# 代码文件所在位置
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 拼接路径
+# 拼接路径，读取datas.xlsx
 data_path = os.path.join(BASE_DIR, 'datas.xlsx')
+
 preview = pd.read_excel(data_path, header=None, nrows=50)#先截前50行找数据起点位置
 
 header_row = None
@@ -101,7 +102,8 @@ plt.plot(
 plt.title('月度收支趋势图',fontsize=20,color='black')
 
 plt.xlabel('时间',fontsize=15,color='black',labelpad=10)
-plt.ylabel('金额',fontsize=15,color='black',labelpad=15,rotation=0)#让纵轴标题水平过来
+plt.ylabel('金额',fontsize=15,color='black',labelpad=15,rotation=0)
+#让纵轴标题水平过来
 
 plt.legend(loc='upper left')
 
@@ -125,6 +127,8 @@ plt.show()
 
 # 2.绘制消费时间条形图
 plt.figure(figsize=(15,8))
+#一定要新开一张图！plt.show()会重置画布大小
+
 datas['交易小时']=datas['交易时间'].dt.hour
 datash=datas.groupby(["交易小时","收/支"],as_index=False)["金额(元)"].sum()
 #分组聚合成长表，分别每个小时的支出总和与收入总和
