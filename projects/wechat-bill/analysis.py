@@ -45,7 +45,6 @@ print(datas.duplicated().sum())
 datas['交易年月']=datas['交易时间'].dt.to_period('M')
 # 保存交易年月
 
-datas = datas[datas['交易年月']!='2026-06']
 datas = datas[~datas['收/支'].str.contains('/', na=False)]
 datas = datas[~datas['交易对方'].str.contains('/', na=False)]
 datas = datas[~datas['商品'].str.contains('/', na=False)]
