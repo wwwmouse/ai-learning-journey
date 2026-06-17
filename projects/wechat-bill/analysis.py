@@ -6,8 +6,10 @@ from matplotlib import rcParams
 rcParams['font.family']= 'SimHei'
 # windows处理中文
 
-def save_chart(filename):
+# 代码文件所在位置
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+def save_chart(filename):
 #保存图表到 results-pictures 文件夹
     save_dir = os.path.join(BASE_DIR, 'results-pictures')
     os.makedirs(save_dir, exist_ok=True)
@@ -18,10 +20,6 @@ def save_chart(filename):
         bbox_inches='tight'
     )
 
-
-
-# 代码文件所在位置
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 拼接路径，读取datas.xlsx
 data_path = os.path.join(BASE_DIR, 'datas.xlsx')

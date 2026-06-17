@@ -18,10 +18,10 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 #   创建文件夹
 #   exist_ok=True的意思是：如果文件夹已经存在，别报错，跳过
 
-def save_plot(filename, dpi=150):
+def save_plot(filename):
     """保存当前图表到 results-pictures 文件夹"""
     filepath = os.path.join(SAVE_DIR, filename)
-    plt.savefig(filepath, dpi=dpi)
+    plt.savefig(filepath, dpi=300)
     print(f"已保存: {filename}")
     
 # 自动下载 CIFAR-10 数据集（第一次会下载，约 170MB）
