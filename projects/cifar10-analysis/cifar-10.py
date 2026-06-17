@@ -1,7 +1,29 @@
+import os
 import numpy as np
 from torchvision import datasets
 import matplotlib.pyplot as plt
 
+from matplotlib import rcParams
+rcParams['font.family']= 'SimHei'
+
+# 图片保存目录（在脚本所在目录下）
+SAVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results-pictures')
+
+#   __file__:Python 内置变量，值是当前脚本文件的路径
+#  os.path.abspath(__file__):把 __file__ 转成绝对路径
+#  os.path.dirname(...):取路径中的目录部分，把文件名砍掉
+#  os.path.join(..., 'results-pictures'):把两部分拼接成一个合法路径
+
+os.makedirs(SAVE_DIR, exist_ok=True)
+#   创建文件夹
+#   exist_ok=True的意思是：如果文件夹已经存在，别报错，跳过
+
+def save_plot(filename, dpi=150):
+    """保存当前图表到 results-pictures 文件夹"""
+    filepath = os.path.join(SAVE_DIR, filename)
+    plt.savefig(filepath, dpi=dpi)
+    print(f"已保存: {filename}")
+    
 # 自动下载 CIFAR-10 数据集（第一次会下载，约 170MB）
 print("正在加载 CIFAR-10 数据集...")
 dataset = datasets.CIFAR10(root='./data', train=True, download=True)
@@ -34,10 +56,8 @@ plt.bar(classes, class_counts, color='steelblue')#
 plt.xlabel('类别')#横轴标签
 plt.ylabel('图片数量')#纵轴标签
 plt.title('CIFAR-10 训练集类别分布')#整张图的标题
-plt.xticks(rotation=45)  # 标签旋转45度，防止重叠
 plt.tight_layout()#自动调整子图间距
-plt.savefig('cifar10_class_distribution.png', dpi=150)#保存到文件
-print("已保存: cifar10_class_distribution.png")
+save_plot('类别分布柱状图')
 plt.show()
 
 # ========================================
@@ -77,8 +97,7 @@ plt.ylabel('频数')
 plt.title('CIFAR-10 RGB 通道像素分布')
 plt.legend()
 plt.tight_layout()
-plt.savefig('cifar10_rgb_histogram.png', dpi=150)
-print("已保存: cifar10_rgb_histogram.png")
+save_plot('RGB像素分布直方图.png')
 plt.show()
 
 # ========================================
@@ -101,11 +120,10 @@ for idx, ax in zip(indices, axes.flat):
     ax.axis('off')                    # 不显示坐标轴
 
 plt.tight_layout()
-plt.savefig('cifar10_sample_grid.png', dpi=150)
-print("已保存: cifar10_sample_grid.png")
+save_plot('随机样本拼图.png')
 plt.show()
 
-print("\n✅ 分析完成！生成3张图片：")
-print("  1. cifar10_class_distribution.png - 类别分布柱状图")
-print("  2. cifar10_rgb_histogram.png - RGB像素分布直方图")
-print("  3. cifar10_sample_grid.png - 随机样本拼图")
+print("\n生成3张分析结果图片：")
+print("1.类别分布柱状图")
+print("2.RGB像素分布直方图")
+print("3.随机样本拼图")
