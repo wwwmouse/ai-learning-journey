@@ -121,6 +121,7 @@ save_chart("月度收支趋势图.png")
 plt.show()
 
 # 2.绘制消费时间条形图
+plt.figure(figsize=(15,8))
 datas['交易小时']=datas['交易时间'].dt.hour
 datash=datas.groupby(["交易小时","收/支"],as_index=False)["金额(元)"].sum()
 #分组聚合成长表，分别每个小时的支出总和与收入总和
@@ -167,7 +168,7 @@ plt.ylim(0,max(day_money)+501)
 plt.grid(True, axis='y', alpha=0.6, color="gray")
 
 for x,y in enumerate(day_money):
-     plt.text(x,y,str(y),ha="center",va="bottom",fontsize=10,color='black',rotation=30)
+     plt.text(x,y,str(y),ha="center",va="bottom",fontsize=10,color='black')
      
 plt.tight_layout()
 save_chart("消费时段分布图.png")
