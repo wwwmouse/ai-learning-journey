@@ -2,8 +2,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
+from matplotlib import rcParams
+rcParams['font.family']= 'SimHei'
+# windows处理中文
+
 def save_chart(filename):
-    """保存图表到 results-pictures 文件夹"""
+#   保存图表到 results-pictures 文件夹
     base_dir = os.path.dirname(__file__)
     save_dir = os.path.join(BASE_DIR, 'results-pictures')
     os.makedirs(save_dir, exist_ok=True)
@@ -15,9 +19,6 @@ def save_chart(filename):
     )
 #保存图片，封装成函数
 
-from matplotlib import rcParams
-rcParams['font.family']= 'SimHei'
-#windows处理中文
 
 # 代码文件所在目录（E:\VScode\wechat-bill）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -36,11 +37,14 @@ del preview #手动释放
 
 datas = pd.read_excel(data_path, header=header_row)#从列索引那一行开始读
 
+# 空白检查，确认关键数据没有缺失值
 print(datas.isna().sum())
-# 空白检查，确认每列都没有空的
+core_data=['交易时间','收/支','金额(元)']
+datas=datas.dropna(subset=core_data)
 
-print(datas.duplicated().sum())
 # 重复检查，确认没重复内容
+print(f'重复{datas.duplicated().sum()}行')
+datas=datas.drop_duplicates()
 
 datas['交易年月']=datas['交易时间'].dt.to_period('M')
 # 保存交易年月
