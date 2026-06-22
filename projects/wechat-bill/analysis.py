@@ -31,11 +31,11 @@ for i in range(len(preview)):
     if str(preview.iloc[i, 0]) == '交易时间':
         header_row = i #找到数据列索引那一行对应的行索引
         break
-    
-del preview #手动释放
 
+# 上一步只读了前50行来找表头位置，现在用找到的行号正式读取全部数据
 datas = pd.read_excel(data_path, header=header_row)#从列索引那一行开始读
 
+# 数据清洗：去除关键列缺失、重复行、含'/'的异常行
 # 空白检查，确认关键数据没有缺失值
 print(datas.isna().sum())
 core_data=['交易时间','收/支','金额(元)']
@@ -48,11 +48,10 @@ datas=datas.drop_duplicates()
 datas['交易年月']=datas['交易时间'].dt.to_period('M')
 # 保存交易年月
 
+# 去掉收支、交易对方和商品列中的特殊项'/'
 datas = datas[~datas['收/支'].str.contains('/', na=False)]
 datas = datas[~datas['交易对方'].str.contains('/', na=False)]
 datas = datas[~datas['商品'].str.contains('/', na=False)]
-# 扔掉2026-06的数据
-# 去掉收支、交易对方和商品列中的特殊项'/'
 
 
 # 1.绘制月份收支折线图
@@ -60,21 +59,21 @@ datas = datas[~datas['商品'].str.contains('/', na=False)]
 # 检查数据类型发现时间已经是datetime64[us]类型了
 
 datas=datas.sort_values('交易年月')
-datasm=datas.groupby(['交易年月','收/支'],as_index=False)['金额(元)'].sum()
+monthly_summary=datas.groupby(['交易年月','收/支'],as_index=False)['金额(元)'].sum()
 #分组聚合，形成每个月总金额图
-#print(datasm)
+#print(monthly_summary)
 
-datasm_w=datasm.pivot(index='交易年月',columns='收/支',values='金额(元)')
-datasm_w=datasm_w.reset_index() #令交易年月从索引变为普通列，不然没法从列取时间
-datasm_w.columns.name=None
+monthly_pivot=monthly_summary.pivot(index='交易年月',columns='收/支',values='金额(元)')
+monthly_pivot=monthly_pivot.reset_index() #令交易年月从索引变为普通列，不然没法从列取时间
+monthly_pivot.columns.name=None
 
-print(datasm_w)
+print(monthly_pivot)
 # 长表变宽表，分开收/支
 
-expend=datasm_w['支出'].round(2)
-income=datasm_w['收入'].round(2)
+expend=monthly_pivot['支出'].round(2)
+income=monthly_pivot['收入'].round(2)
 
-times=datasm_w['交易年月']
+times=monthly_pivot['交易年月']
 times=times.astype(str)
 plt.figure(figsize=(15,8))
 
@@ -128,10 +127,10 @@ plt.figure(figsize=(15,8))
 #一定要新开一张图！plt.show()会重置画布大小
 
 datas['交易小时']=datas['交易时间'].dt.hour
-datash=datas.groupby(["交易小时","收/支"],as_index=False)["金额(元)"].sum()
+hourly_summary=datas.groupby(["交易小时","收/支"],as_index=False)["金额(元)"].sum()
 #分组聚合成长表，分别每个小时的支出总和与收入总和
 
-expend=datash[datash['收/支']=='支出'].round(2)
+expend=hourly_summary[hourly_summary['收/支']=='支出'].round(2)
 #筛选支出总和，制成新表
 
 expend=expend.pivot(index='交易小时',columns='收/支',values='金额(元)')
