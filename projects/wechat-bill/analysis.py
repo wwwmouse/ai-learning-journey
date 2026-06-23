@@ -275,7 +275,7 @@ for at in autotexts:
 plt.title('消费分类构成',fontsize=20,pad=20)
 
 # 图例：类别 + 金额
-legend_labels=[f'{cat}  ¥{amt:.2f}' for cat,amt in zip(main.index,main.values)]
+legend_labels=[f'{cat}  ￥{amt:.2f}' for cat,amt in zip(main.index,main.values)]
 plt.legend(wedges,legend_labels,title='类别 / 金额',
            loc='center left',bbox_to_anchor=(1,0,0.5,1),fontsize=10)
 
