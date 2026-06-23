@@ -38,9 +38,9 @@ python cifar10_analysis.py
 
 | 输出文件 | 预览 |
 |---------|------|
-| 类别分布 | ![类别分布](results-pictures/cifar10_class_distribution.png) |
-| RGB直方图 | ![RGB直方图](results-pictures/cifar10_rgb_histogram.png) |
-| 样本拼图 | ![样本拼图](results-pictures/cifar10_sample_grid.png) |
+| 类别分布 | ![类别分布](results-pictures/类别分布柱状图.png) |
+| RGB直方图 | ![RGB直方图](results-pictures/随机样本拼图.png) |
+| 样本拼图 | ![样本拼图](results-pictures/RGB像素分布直方图.png) |
 
 ## 数据集概况
 
