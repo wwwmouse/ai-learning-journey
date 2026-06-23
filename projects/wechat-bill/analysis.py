@@ -21,6 +21,36 @@ def save_chart(filename):
     )
 
 
+# ── 关键词分类 ──
+# 按优先级从上到下匹配，命中即返回，未命中归入"未分类"
+def classify_counterparty(name):
+    name=str(name)
+
+    # 外卖（放在餐厅前面，避免被"美食"等误匹配）
+    if any(k in name for k in ['美团','饿了么','外卖','熊猫来了']):
+        return '外卖'
+    # 饮品
+    if any(k in name for k in ['瑞幸','咖啡','奶茶','蜜雪','星巴克','茶百道']):
+        return '饮品'
+    # 餐饮（食堂/小吃/餐厅/常见菜名）
+    if any(k in name for k in ['餐厅','食堂','美食','小吃','餐饮','大学','学院']):
+        return '餐饮'
+    # 超市/便利店
+    if any(k in name for k in ['超市','便利店','商贸','商店','商场','每一天','京东','淘宝','拼多多','闲鱼']):
+        return '购物'
+    # 打印
+    if any(k in name for k in ['打印','复印','快印','云印']):
+        return '打印'
+    # 交通
+    if any(k in name for k in ['地铁','公交','滴滴','打车','出行','铁路','高德']):
+        return '交通'
+    # 商场/娱乐
+    if any(k in name for k in ['赛格','影城','KTV','抖音','网易云音乐','快手','酷狗',]):
+        return '娱乐'
+
+    return '未分类'
+
+
 # 拼接路径，读取datas.xlsx
 data_path = os.path.join(BASE_DIR, 'datas.xlsx')
 
@@ -176,4 +206,79 @@ for x,y in enumerate(day_money):
      
 plt.tight_layout()
 save_chart("消费时段分布图.png")
+plt.show()
+
+
+# 3.绘制消费分类饼图
+expense = datas[datas['收/支']=='支出'].copy()
+expense['类别'] = None  # 先占位，防止后面 isna() 空列报错
+
+# 转账/红包/群收款 → 交易对方是个人，无法按商户归类，单独列出
+transfer_mask = expense['交易类型'].isin(['转账','红包','群收款','微信红包'])
+expense.loc[transfer_mask, '类别'] = '转账/红包'
+
+# 其余的正常跑关键词
+keyword_mask = expense['类别'].isna()
+expense.loc[keyword_mask, '类别'] = expense.loc[keyword_mask, '交易对方'].apply(classify_counterparty)
+
+print('=== 分类命中统计 ===')
+print(expense['类别'].value_counts())
+print()
+
+# 列出所有被归为"其他"的交易对方，方便补关键词
+others = expense[expense['类别']=='未分类']['交易对方'].value_counts()
+if len(others) > 0:
+    print(f'未归类的交易对方（{len(others)}个）')
+    print(others.to_string())
+    print()
+
+plt.figure(figsize=(15,8))
+
+cat_stats = expense.groupby('类别')['金额(元)'].sum().sort_values(ascending=False)
+
+# 小类别（不足总数3%）合并为一个"其他（杂项）"
+total=cat_stats.sum()
+main=cat_stats[cat_stats >= total*0.03]
+small_sum=cat_stats[cat_stats < total*0.03].sum()
+if small_sum>0:
+    main['其他（杂项）']=small_sum
+
+# 配色
+color_map={
+    '餐饮':'#e74c3c',
+    '外卖':'#f39c12',
+    '购物':'#2ecc71',
+    '饮品':'#3498db',
+    '打印':'#9b59b6',
+    '交通':'#1abc9c',
+    '娱乐':'#e67e22',
+    '转账/红包':'#e91e63',
+    '未分类':'#95a5a6',
+    '其他（杂项）':'#bdc3c7',
+}
+colors=[color_map.get(c,'#95a5a6') for c in main.index]
+
+wedges,texts,autotexts=plt.pie(
+    main.values,
+    labels=main.index,
+    autopct='%1.1f%%',
+    startangle=90,
+    colors=colors,
+    pctdistance=0.6,
+    textprops={'fontsize':13}
+)
+
+for at in autotexts:
+    at.set_fontsize(11)
+    at.set_color('white')
+
+plt.title('消费分类构成',fontsize=20,pad=20)
+
+# 图例：类别 + 金额
+legend_labels=[f'{cat}  ¥{amt:.2f}' for cat,amt in zip(main.index,main.values)]
+plt.legend(wedges,legend_labels,title='类别 / 金额',
+           loc='center left',bbox_to_anchor=(1,0,0.5,1),fontsize=10)
+
+plt.tight_layout()
+save_chart('消费分类饼图.png')
 plt.show()
