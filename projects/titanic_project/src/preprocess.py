@@ -1,6 +1,6 @@
+import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import StandardScaler
 #   之前的探索发现了这些问题，现在逐一解决：
@@ -8,19 +8,23 @@ from sklearn.preprocessing import StandardScaler
 #    Cabin缺77%                         直接删列         
 #    NameTicket是文字但没规律            直接删列         
 #    PassengerId是序号                  直接删列         
-#    Age缺20%                           用中位数填充     
+#    Age缺20%                           用中位数填充  
+#    Embarked 缺 2 个                    用众数填充   
 #    Sex是male/female文字               转成数字         
 #    Embarked是S/C/Q文字                转成数字         
 #    各特征数值范围差很大（Fare 0~512）   标准化到同一尺度 
 
-df=pd.read_csv("AI-learning/projects/titanic_project/data/train.csv")
+# 项目根目录（脚本所在目录的上一级）
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+df = pd.read_csv(os.path.join(PROJECT_DIR, '..', 'data', 'train.csv'))
 
 # 1.删除无用列
 
 df=df.drop(['PassengerId','Name','Ticket','Cabin'],axis=1)
 #这些列对结果没意义
 
-# 2.中位数填充缺失值
+# 2.中位数填充年龄缺失值
 
 age_median=df['Age'].median()
 print(f'年龄中位数:{age_median}')
@@ -35,6 +39,7 @@ df['Sex'] = LabelEncoder().fit_transform(df['Sex'])
 # Embarked：S→2, C→0, Q→1（字母序排列）
 df['Embarked'] = df['Embarked'].fillna(df['Embarked'].mode()[0])
 df['Embarked'] = LabelEncoder().fit_transform(df['Embarked'])
+# Embarked 只缺 2个值（0.22%），用众数填就行
 
 # LabelEncoder 做的事：把所有不同的文本值按字母排序，然后从 0 开始编号。
 # fit_transform 拆开理解：
@@ -74,3 +79,5 @@ X_test = scaler.transform(X_test)        # 在测试集上：无法计算均值�
 #   StandardScaler 把每列变成"均值为 0，标准差为 1"：
 #   原始 Age: [2, 22, 28, 35, 80]
 #   标准化后: [-1.2, -0.3, 0.0, 0.4, 2.7]   ← 负数表示低于平均，正数表示高于平均。
+
+print(f'预处理完成。训练集形状: {X_train.shape}, 测试集形状: {X_test.shape}')

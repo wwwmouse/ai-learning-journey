@@ -1,3 +1,4 @@
+import os
 import matplotlib
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -7,11 +8,14 @@ matplotlib.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei']
 # 指定用微软雅黑或黑体渲染文字
 matplotlib.rcParams['axes.unicode_minus'] = False
   
-df=pd.read_csv("AI-learning/projects/titanic_project/data/train.csv")
+# 项目根目录（脚本所在目录的上一级）
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+df = pd.read_csv(os.path.join(PROJECT_DIR, '..', 'data', 'train.csv'))
 
 print(df.head())
 print(df.shape) #(891,12)
-# print(df.dtypes) 
+print(df.dtypes) 
 
 print(df.isna().sum())
 print(df.isna().mean()*100)
@@ -26,7 +30,7 @@ print(df.describe())
 print(f"生存率:{df['Survived'].mean()}")
 sns.countplot(x='Survived', data=df)
 plt.title('生存人数统计 (0=死亡, 1=存活)')
-plt.savefig('AI-learning/projects/titanic_project/images/survival_count.png', dpi=150, bbox_inches='tight')
+plt.savefig(os.path.join(PROJECT_DIR, '..', 'images', 'survival_count.png'), dpi=150, bbox_inches='tight')
 
 # 性别 vs 存活
 
@@ -39,7 +43,7 @@ print(f"女性存活率:{female_target['Survived'].mean()}")
 plt.figure()  # 新开一张画布，不和上一张重叠
 sns.countplot(x='Sex', hue='Survived', data=df)
 plt.title('性别与生存关系')
-plt.savefig('AI-learning/projects/titanic_project/images/sex_survival.png', dpi=150, bbox_inches='tight')
+plt.savefig(os.path.join(PROJECT_DIR, '..', 'images', 'sex_survival.png'), dpi=150, bbox_inches='tight')
 
 # 舱位等级 vs 存活
 
@@ -49,7 +53,7 @@ print(f"三等舱存活率:{df[df['Pclass']==3]['Survived'].mean()}")
 plt.figure()
 sns.countplot(x='Pclass', hue='Survived', data=df)
 plt.title('舱位等级与生存关系')
-plt.savefig('AI-learning/projects/titanic_project/images/pclass_survival.png', dpi=150, bbox_inches='tight')
+plt.savefig(os.path.join(PROJECT_DIR, '..', 'images', 'pclass_survival.png'), dpi=150, bbox_inches='tight')
 
 # 年龄 vs 存活
 
@@ -63,4 +67,4 @@ sns.histplot(
     multiple='stack'#死亡和存活的柱子垒起来，别叠在一起
     )
 plt.title('年龄分布与生存关系')
-plt.savefig('AI-learning/projects/titanic_project/images/age_survival.png', dpi=150, bbox_inches='tight')
+plt.savefig(os.path.join(PROJECT_DIR, '..', 'images', 'age_survival.png'), dpi=150, bbox_inches='tight')
