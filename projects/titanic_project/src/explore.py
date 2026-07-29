@@ -50,6 +50,7 @@ plt.title('性别与生存关系')
 plt.savefig('AI-learning/projects/titanic_project/images/sex_survival.png', dpi=150, bbox_inches='tight')
 
 #舱位等级VS存活
+
 print(f"一等舱存活率:{df[df['Pclass']==1]['Survived'].mean()}")
 print(f"二等舱存活率:{df[df['Pclass']==2]['Survived'].mean()}")
 print(f"三等舱存活率:{df[df['Pclass']==3]['Survived'].mean()}")
@@ -61,6 +62,13 @@ plt.savefig('AI-learning/projects/titanic_project/images/pclass_survival.png', d
 #年龄 vs 存活
 
 plt.figure()
-sns.histplot(x='Age', hue='Survived', data=df, kde=True, bins=30, multiple='stack')
+sns.histplot(
+    x='Age',        #横轴：年龄
+    hue='Survived', #按是否存活分层着色
+    data=df,        #数据来源
+    kde=True,       #加一条平滑趋势线
+    bins=30,        #切成 30 个年龄区间统计
+    multiple='stack'#死亡和存活的柱子垒起来，别叠在一起
+    )
 plt.title('年龄分布与生存关系')
 plt.savefig('AI-learning/projects/titanic_project/images/age_survival.png', dpi=150, bbox_inches='tight')
