@@ -1,9 +1,7 @@
 import os
 
 # 数据处理
-import pandas as pd
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.model_selection import GridSearchCV
 
 # 模型
 from sklearn.linear_model import LogisticRegression
@@ -23,21 +21,9 @@ import matplotlib.pyplot as plt
 # 项目根目录（脚本所在目录的上一级）
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ========== 数据预处理（与 preprocess.py 相同）==========
-df = pd.read_csv(os.path.join(PROJECT_DIR, '..', 'data', 'train.csv'))
-df = df.drop(['PassengerId', 'Name', 'Ticket', 'Cabin'], axis=1)
-df['Age'] = df['Age'].fillna(df['Age'].median())
-df['Sex'] = LabelEncoder().fit_transform(df['Sex'])
-df['Embarked'] = df['Embarked'].fillna(df['Embarked'].mode()[0])
-df['Embarked'] = LabelEncoder().fit_transform(df['Embarked'])
-X = df.drop('Survived', axis=1)
-y = df['Survived']
-X_train, X_test, y_train, y_test = train_test_split(
-      X, y, test_size=0.3, random_state=42, stratify=y
-)
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
+# ========== 数据预处理（从 preprocess.py 导入）==========
+from preprocess import load_and_preprocess
+X_train, X_test, y_train, y_test = load_and_preprocess()
 
 #   训练逻辑回归模型
 model = LogisticRegression(max_iter=1000, random_state=42)
@@ -165,7 +151,7 @@ plt.savefig(os.path.join(PROJECT_DIR, '..', 'images', 'model_comparison.png'), d
 plt.close()
 print('已保存: model_comparison.png')
 
-
+# 随机森林调参
 rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
 rf_model.fit(X_train, y_train)
 
@@ -242,7 +228,7 @@ print(classification_report(y_test, y_pred_best))
 feature_names = ['Pclass', 'Sex', 'Age', 'SibSp', 'Parch', 'Fare', 'Embarked']
 importances = best_model.feature_importances_
 
-# 从大到小排序打印
+# 特征重要性可视化
 sorted_idx = importances.argsort()[::-1]
 print('\n====== 特征重要性 ======')
 for i in sorted_idx:
