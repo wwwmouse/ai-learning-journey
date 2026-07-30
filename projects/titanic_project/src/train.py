@@ -2,6 +2,7 @@ import os
 
 # 数据处理
 from sklearn.model_selection import GridSearchCV
+import joblib
 
 # 模型
 from sklearn.linear_model import LogisticRegression
@@ -23,7 +24,7 @@ PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ========== 数据预处理（从 preprocess.py 导入）==========
 from preprocess import load_and_preprocess
-X_train, X_test, y_train, y_test = load_and_preprocess()
+X_train, X_test, y_train, y_test, feature_names = load_and_preprocess()
 
 #   训练逻辑回归模型
 model = LogisticRegression(max_iter=1000, random_state=42)
@@ -198,6 +199,12 @@ y_pred_best = best_model.predict(X_test)
 print('\n调参后分类报告:')
 print(classification_report(y_test, y_pred_best))
 
+# 保存模型
+models_dir = os.path.join(PROJECT_DIR, '..', 'models')
+os.makedirs(models_dir, exist_ok=True)
+joblib.dump(best_model, os.path.join(models_dir, 'rf_model.pkl'))
+print(f'模型已保存: models/rf_model.pkl')
+
 # 最佳参数: {'max_depth': 10, 'min_samples_split': 2, 'n_estimators': 200}
 #   max_depth=10：每棵树最多问 10 层问题。
 #   之前你手填的是 None（不限制），现在发现限到 10反而更好——不限制会让树"背题目"（过拟合），10 层刚好够又不至于背
@@ -223,9 +230,7 @@ print(classification_report(y_test, y_pred_best))
 
 
 # ========== 随机森林 - 特征重要性 ==========
-# 注意：X_train 经过 StandardScaler 后变成了 numpy 数组，列名丢失。
-# 这里按 preprocess 的顺序手动重建列名。顺序错了重要性就对不上！
-feature_names = ['Pclass', 'Sex', 'Age', 'SibSp', 'Parch', 'Fare', 'Embarked']
+# feature_names 由 load_and_preprocess() 返回，不需要手动写了
 importances = best_model.feature_importances_
 
 # 特征重要性可视化
