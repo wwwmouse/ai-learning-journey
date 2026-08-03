@@ -26,39 +26,52 @@ PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 from preprocess import load_and_preprocess
 X_train, X_test, y_train, y_test, feature_names = load_and_preprocess()
 
-#   训练逻辑回归模型
+#   scikit-learn 里所有模型的用法完全统一:
+#   model = 某模型(参数)      1. 选模型（还没开始学）
+#   model.fit(X_train, y_train)    2. 学（喂题目+答案）
+#   y_pred = model.predict(X_test)   3. 考（只看题目，不看答案）
+
+#    训练逻辑回归模型
 model = LogisticRegression(max_iter=1000, random_state=42)
 model.fit(X_train, y_train)
-
-y_pred = model.predict(X_test)
-print('准确率:', accuracy_score(y_test, y_pred))
+y_pred = model.predict(X_test) # 预测结果
+print('准确率:', accuracy_score(y_test, y_pred)) # 对比预测结果与标准答案，计算准确率
 # 准确率0.794776
 # 我用最直白最通俗最容易懂最不饶弯子的话告诉讲明白：这玩意就是个废物
 
 print('\n混淆矩阵:')
-print(confusion_matrix(y_test, y_pred))
+print(confusion_matrix(y_test, y_pred)) # 直接根据预测结果和最终结果计算混淆矩阵
 #    混淆矩阵：
 #                 预测死亡  预测存活
 #    实际死亡   [[   140      25]
 #    实际存活    [   30       73]]
 
 print('\n分类报告:')
-print(classification_report(y_test, y_pred))
+print(classification_report(y_test, y_pred)) # 同上，直接计算分类报告
 
 # 分类报告:                                                                                                                            
-# precision    recall  f1-score   support
+#        precision    recall  f1-score   support
 
 #  0       0.82      0.85      0.84       165
 #  1       0.74      0.71      0.73       103
 
-#   precision（准确率）= 你说它活了，它真的活了吗
-#   模型说"这人能活"的 73+25=98 个人里，只有 73 个真的活了。74% 的精确率意思是：模型判存活的时候，有 26% 的概率在瞎说。
+#   support是每一行数据的总数，在这里指的是实际死亡165、实际存活103
 
-#   recall（召回率）= 真活着的人，你找到了几个
-#   103 个真活着的人里，模型只找到了 73 个，漏了 30 个。71% 的召回率就是"存活的人里漏了 29%"。
+# 类别 0（死亡）：
+#   precision=0.82(死亡精确率)：模型说"死亡"的 140+30=170 人里，140 人真的死了 140/170=82%
+#   recall=0.85(死亡召回率)：    165 个真死的人里，模型找出了 140 个 140/165=85%
+#
+# 类别 1（存活）：
+#   precision=0.74(存活精确率)：模型说"存活"的 25+73=98 人里，73 人真的活了 → 说"活"时 26% 在瞎说
+#   recall=0.71(存活召回率)：    103 个真活的人里，模型只找到 73 个 → 漏了 30 个（29%）
 
-#   f1-score = 精确率和召回率的中间平衡值
-#   73% 是 74% 和 71% 的调和平均。这个值不高，说明模型对"存活"的判断比较吃力——更倾向于判死亡。
+# 绝大多数情况下，召回率和精确率为反比例
+# 但我们需要两者在可以接受的范围内都尽可能高，因此我们需要一个可以综合评价模型的数值
+
+# f1-score ≈ 0.73：精确率(0.74)和召回率(0.71)的调和平均
+# 调和平均数的特点是会"惩罚"偏科的情况，因此更能综合评价模型能力
+# 模型明显更擅长判断"死亡"（f1=0.84），判断"存活"比较吃力（f1=0.73）
+# 说明模型整体倾向于保守预测——宁判死，不漏活
 
 #   多种模型对比
 models = {
@@ -153,6 +166,8 @@ plt.close()
 print('已保存: model_comparison.png')
 
 # 随机森林调参
+
+# 先跑一个"基准版"随机森林
 rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
 rf_model.fit(X_train, y_train)
 
@@ -167,17 +182,20 @@ plt.savefig(os.path.join(PROJECT_DIR, '..', 'images', 'confusion_matrix.png'), d
 plt.close()
 print('已保存: confusion_matrix.png')
 
+# 正式开始调参
 
+# 构建参数网络 
 param_grid = {
     'n_estimators': [50, 100, 200],
     'max_depth': [None, 5, 10, 20],
     'min_samples_split': [2, 5, 10],
 }
-#  param_grid 需要搜 3 × 4 × 3 = 36 种组合:
-#  n_estimators — 森林里种多少棵树。少了不准、多了慢。50/100/200 三个档位看拐点在哪
-#  max_depth — 每棵树最多问几层问题。None 是不限制，让树自由生长；限制到 5 或 10 可以防止那棵树死记硬背训练集
-#  min_samples_split — 一个节点至少要有几个人才继续分叉。设成 10 的意思是"少于 10 个人的组别再细分了，没意义"
+#  param_grid 中共计 3 × 4 × 3 = 36 种组合:
+#  n_estimators : 森林里种多少棵树。少了模型不准，多了训练太慢。50/100/200 三个档位看拐点在哪
+#  max_depth : 每棵树最多问几层问题。None 是不限制，让树自由生长；限制到 5 或 10 可以防止那棵树死记硬背训练集
+#  min_samples_split : 一个节点至少要有几个人才继续分叉。设成 10 的意思是"少于 10 个人的组别再细分"，防止过拟合。
 
+# 利用参数网络进行调参，寻找最优参数组合
 grid = GridSearchCV(
     RandomForestClassifier(random_state=42),
     param_grid,
@@ -185,36 +203,24 @@ grid = GridSearchCV(
     scoring='accuracy',
     n_jobs=-1
 )
-# GridSearchCV 做的事：36 种组合，每种用 5 折交叉验证评估，选分数最高的那个。cv=5 把训练集再切 5
-# 份轮流转，比单次划分更可信。n_jobs=-1 并行跑，你 CPU 有几个核就同时跑几个
+# GridSearchCV 做的事：param_grid中的36种组合暴力穷举找最优
+# 每种用 5 折交叉验证评估，选分数最高的那个。
+# cv=5 把训练集再切5份轮流转，比单次划分更可信。n_jobs=-1 并行跑，CPU 有几个核就同时跑几个
+
 grid.fit(X_train, y_train)
 
 print('\n====== 调参结果 ======')
 print(f'最佳参数: {grid.best_params_}')
 print(f'最佳交叉验证分数: {grid.best_score_:.4f}')
 print(f'测试集分数: {grid.score(X_test, y_test):.4f}')
+#   最佳参数: {'max_depth': 10, 'min_samples_split': 2, 'n_estimators': 200}
+#   最佳交叉验证分数: 0.8330  (在训练过程中测的)
+#   测试集分数: 0.8022       (在真正的"陌生人"上测的)
 
-best_model = grid.best_estimator_
-y_pred_best = best_model.predict(X_test)
+best_model = grid.best_estimator_ # 记录最优模型
+y_pred_best = best_model.predict(X_test) # 记录最优模型的测试答案
 print('\n调参后分类报告:')
-print(classification_report(y_test, y_pred_best))
-
-# 保存模型
-models_dir = os.path.join(PROJECT_DIR, '..', 'models')
-os.makedirs(models_dir, exist_ok=True)
-joblib.dump(best_model, os.path.join(models_dir, 'rf_model.pkl'))
-print(f'模型已保存: models/rf_model.pkl')
-
-# 最佳参数: {'max_depth': 10, 'min_samples_split': 2, 'n_estimators': 200}
-#   max_depth=10：每棵树最多问 10 层问题。
-#   之前你手填的是 None（不限制），现在发现限到 10反而更好——不限制会让树"背题目"（过拟合），10 层刚好够又不至于背
-#   min_samples_split=2：一个节点只要有 2 个人就可以继续分裂。
-#   搜了 5 和 10，都不如 2 好——你的数据只有 623行训练集，设大了节点太少，学不够
-#   n_estimators=200：200 棵树比 100 棵好，说明多树投票在这个数据上还能再稳一点
-
-# 最佳交叉验证分数: 0.8330  在训练过程中测的
-# 测试集分数: 0.8022       在真正的"陌生人"上测的
-
+print(classification_report(y_test, y_pred_best)) # 输出最优模型的分类报告
 # 调参后分类报告:
 #             precision    recall  f1-score   support
 
@@ -223,6 +229,13 @@ print(f'模型已保存: models/rf_model.pkl')
 # accuracy                            0.80       268
 # macro avg       0.80      0.78      0.78       268
 # weighted avg    0.80      0.80      0.80       268
+
+# 保存模型
+models_dir = os.path.join(PROJECT_DIR, '..', 'models')
+os.makedirs(models_dir, exist_ok=True)
+joblib.dump(best_model, os.path.join(models_dir, 'rf_model.pkl'))
+print(f'模型已保存: models/rf_model.pkl')
+
 
 # 准确率从 79.1% 涨到 80.2%，涨了 1%。不多，但在 ML 里每涨一点都是真的提升了——不是运气
 # 存活 recall 还是 66%，没动。这说明 66% 可能是你这 7 个特征能达到的天花板——漏掉的 34%
@@ -235,6 +248,8 @@ importances = best_model.feature_importances_
 
 # 特征重要性可视化
 sorted_idx = importances.argsort()[::-1]
+# argsort() 从小到大排 -1将整个列表倒过来
+# 最终就是重要性由高到低的编号
 print('\n====== 特征重要性 ======')
 for i in sorted_idx:
     print(f'  {feature_names[i]:12s}  {importances[i]:.4f}')
