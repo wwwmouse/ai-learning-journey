@@ -58,6 +58,10 @@ def load_and_preprocess():
     # 因为"考试"时不知道考试数据的真实分布，用测试集自己的均值和标准差去标准化，等于偷看了考试数据
     # 造成数据泄露（data leakage），导致模型评估结果虚高，是初学者最容易犯的错误之一
 
+    # 统一转为 numpy 数组，避免下游混淆（X 是 ndarray 但 y 是 Series）
+    y_train = y_train.values
+    y_test = y_test.values
+
     print(f'预处理完成。训练集形状: {X_train.shape}, 测试集形状: {X_test.shape}')
     return X_train, X_test, y_train, y_test, feature_names
 
