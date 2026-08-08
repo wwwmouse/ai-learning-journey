@@ -1,14 +1,11 @@
 # PyTorch 训练通用工具函数
-
 # 六个脚本(mnist/cifar10 下 mlp/cnn/cnn_optimized)的公共逻辑抽到这里
-# 改训练循环只改这一个文件。
-
+# 改训练循环只改这一个文件即可
 
 import os
 import random
 import torch
 import matplotlib.pyplot as plt
-
 
 # ===== 1. 固定随机种子 =====
 
@@ -52,9 +49,9 @@ def get_device():
 # ===== 3. 训练一个 epoch =====
 
 def train_one_epoch(model, loader, loss_fn, optimizer, device):
-    # 跑一个 epoch 的训练：五步循环，返回平均 loss
+    # 跑一个 epoch 的训练：五步循环，返回平均 loss，评价模型目前有多烂
 
-    # 五步顺序（写死在参数里的知识）：
+    #    五步顺序：
     #    zero_grad  →  forward  →  loss  →  backward  →  step
 
     # Args:
@@ -73,11 +70,11 @@ def train_one_epoch(model, loader, loss_fn, optimizer, device):
     for images, labels in loader:
         images, labels = images.to(device), labels.to(device)
 
-        optimizer.zero_grad()            # ① 清空上一轮梯度
-        outputs = model(images)          # ② 前向传播
-        loss = loss_fn(outputs, labels)  # ③ 算 loss
-        loss.backward()                  # ④ 反向传播——自动求梯度
-        optimizer.step()                 # ⑤ 真的去调参数
+        optimizer.zero_grad()            #  1.清空上一轮梯度（PyTorch 默认累加，必须清）
+        outputs = model(images)          #  2.前向传播：用当前的 w 和 b 算预测值
+        loss = loss_fn(outputs, labels)  #  3.算 loss：和真实答案比差距
+        loss.backward()                  #  4.反向传播：自动求梯度，存入 w.grad
+        optimizer.step()                 #  5.调参数：等价于w -= lr × w.grad
 
         total_loss += loss.item()
 
@@ -102,14 +99,14 @@ def evaluate(model, loader, device):
     # Returns:
     #     float: 准确率（0~100）
     
-    model.eval()
+    model.eval()                          # 切到测试模式（Dropout 全部打开，不再随机关）
     correct, total = 0, 0
 
-    with torch.no_grad():
+    with torch.no_grad():                # 不搭计算图，评估不需要 backward，省内存
         for images, labels in loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
-            _, predicted = torch.max(outputs, 1)     # 多分类：取最大值的位置
+            _, predicted = torch.max(outputs, 1)     # 沿类别方向取最大，返回 (值, 位置)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 

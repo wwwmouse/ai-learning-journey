@@ -53,16 +53,16 @@ def main():
     ).to(device)
 
     loss_fn = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+    optimizer = optim.SGD(model.parameters(), lr=0.01) # 优化器
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5) # 调度器：可选项，仅优化版使用
 
     # ===== 训练 =====
     epochs = 15
     train_losses, test_accs = [], []
 
     for epoch in range(epochs):
-        avg_loss = train_one_epoch(model, train_loader, loss_fn, optimizer, device)
-        acc = evaluate(model, test_loader, device)
+        avg_loss = train_one_epoch(model, train_loader, loss_fn, optimizer, device) # 接受平均损失率
+        acc = evaluate(model, test_loader, device) # 接受测试集上准确率
         scheduler.step()
 
         train_losses.append(avg_loss)
