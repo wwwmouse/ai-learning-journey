@@ -87,33 +87,42 @@ for step in range(2001):
 
 ### 1.1 数据加载（DataLoader）
 
-sklearn 阶段，泰坦尼克 623 条数据一次全传 `model.fit(X, y)`，内存装得下。MNIST 有 60000 张图，一次全塞内存直接爆。`DataLoader` 解决的就是这件事——切成一个个 batch，每次只喂一小撮。
+sklearn 阶段，泰坦尼克 623 条数据一次全传 `model.fit(X, y)`，内存装得下；MNIST 有 60000 张图，一次全塞内存不友好。
+所以需要分批喂——这就是数据加载要解决的问题。
 
-整个流水线：
+**整体架构**
 
 ```
-datasets.MNIST → transforms.ToTensor → DataLoader
-  拿原始数据        像素 0~255 → 0~1      分批次（每包 64 张）
+ .png  →  Dataset  →  transform  →  DataLoader  →  训练循环
+            读           处理     "堆成一叠"      "喂给模型"
 ```
 
-| 操作 | 函数 | 作用 |
-|------|------|------|
-| 下载数据集 | `datasets.MNIST(root, train=True, download=True)` | 数据从哪来 |
-| 转成 Tensor | `transforms.ToTensor()` | 像素缩放到 0~1，转 PyTorch 格式 |
-| 分批加载 | `DataLoader(dataset, batch_size=64, shuffle=True)` | 每次喂多少张，打不打乱 |
+| 角色 | 干什么 | 输入 → 输出 |
+|------|--------|-------------|
+| `Dataset` | 读数据 | `train_data[0]` → `(PIL Image, 标签 5)` |
+| `transform` | 做预处理 | PIL Image → `torch.Tensor`，像素 0~255 → 0~1 |
+| `DataLoader` | **堆成一叠** | 64 个 `(1,28,28)` → `(64,1,28,28)` |
+| 训练循环 | 拿 batch 喂模型 | `model(images)`，不再关心数据怎么来的 |
 
-两个数据集规模：
+两个关键认知：
 
-| | 训练集 | 测试集 | 图片尺寸 | 类别 |
-|------|--------|--------|---------|------|
-| MNIST | 60,000 | 10,000 | 28×28 灰度 | 0~9 数字 |
-| CIFAR-10 | 50,000 | 10,000 | 32×32 彩色 | 飞机/汽车/鸟/猫/鹿/狗/青蛙/马/船/卡车 |
+**① transform 是懒加载**。`datasets.MNIST(transform=...)` 只是记下"将来用这个函数"，不调用。真正调用是在 `train_data[0]` 取数据那一刻——从磁盘读到 PIL Image，立刻丢给 transform。所以 `RandomHorizontalFlip` 每次取同一张图都可能不同，这才是数据增强的本质。
 
-**`batch_size` 怎么选**：太小（8）→ 梯度噪音大，训练不稳定。太大（512）→ 显存放不下。32/64/128 是常见值，CPU 训练用 64。
+**② shape 在这条链路里变了两次**：
 
-**`shuffle` 为什么重要**：训练集必须打乱——否则模型会记住数据排列顺序（按标签 0→1→2→…），学到的是"0 后面就是 1"而不是"数字长什么样"。测试集不需要打乱。
+```
+Dataset 取出单条 → transform 处理后          → DataLoader 堆叠后
+PIL, H×W           tensor, (1, 28, 28)        (64, 1, 28, 28)
+                   ↑ C 在最前（PyTorch 约定）   ↑ 沿 dim=0 叠了 64 条
+```
 
-**epoch vs batch**：epoch = 整个数据集完整过了一遍；batch = 每次取一小撮；10 个 epoch = 过了 10 遍，每遍切成若干包。
+`(batch, 通道, 高, 宽)` 是 PyTorch 所有视觉层的硬约定，Conv2d 等都按这个顺序读。
+
+#### 参数速查
+
+- **`batch_size`**：每批多少张。太小（8）梯度不稳，太大（512）显存放不下。CPU 训练用 64。
+- **`shuffle`**：训练集打乱，测试集不打。不打乱的话模型会记住标签顺序而不是图片特征。
+- **epoch vs batch**：1 个 batch = 模型更新一次；1 个 epoch = 全数据集过一遍 = `60000/batch_size` 个 batch。
 
 ### 1.2 定义模型
 
@@ -226,64 +235,91 @@ model.load_state_dict(torch.load('model.pth'))
 
 ## II. 核心组件
 
-本节把每个组件拆开，讲清楚**底层在算什么、和 numpy/sklearn 怎么对应**。
 
-### 2.1 数据加载
+### 2.1 数据加载：各组件内部实现
 
-MNIST 数据加载代码：
+先看完整搭建代码，再逐个拆解：
 
 ```python
-transform = transforms.ToTensor()
-train_data = datasets.MNIST(root=DATA_DIR, train=True, download=True, transform=transform)
-test_data  = datasets.MNIST(root=DATA_DIR, train=False, download=True, transform=transform)
+train_transform = transforms.Compose([           # 训练集增强流水线
+    transforms.RandomHorizontalFlip(),           # 每次被调用时以默认概率 50% 做左右镜像
+    transforms.RandomRotation(10),               # 每次在 [-10°, +10°] 内随机选一个角度旋转图片
+    transforms.RandomAffine(0, translate=(0.1, 0.1)), # 不旋转（第一个参数=0），横纵方向最多平移图片尺寸的 10%
+    transforms.ToTensor(),
+])
+test_transform = transforms.ToTensor()           # 测试集只转 Tensor
+
+train_data = datasets.MNIST(root=DATA_DIR, train=True,  download=True, transform=train_transform)
+test_data  = datasets.MNIST(root=DATA_DIR, train=False, download=True, transform=test_transform)
 train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
 test_loader  = DataLoader(test_data, batch_size=64, shuffle=False)
 ```
 
-#### 2.1.1 `datasets.MNIST()` / `datasets.CIFAR10()`
+#### 2.1.1 `transforms.Compose()` :数据处理
+
+**`Compose`**——就是一个顺序调用器，内部接受一个列表。`Compose([A, B, C])` 等价于 `C(B(A(img)))`。
+
+这里训练集进行了增强处理，所以显式调用Compose，测试集由于只需要转Tensor，故省略
+**但其实`transforms.ToTensor()`和`transforms.Compose([transforms.ToTensor()])`完全等价**
+
+**Compose返回一个transforms对象，在正式读取数据集时作为参数调用，直接进行处理。**
+
+**测试集如果做了翻转/平移，测出来的准确率失真，无法衡量模型在真实数据上的表现。**
+
+#### 2.1.2 ToTensor():图片转张量
+
+| | 变之前 | 变之后 |
+|------|--------|--------|
+| 类型 | PIL Image / numpy | `torch.Tensor` |
+| 维度 | `H(高度) × W(宽度) × C(通道)` | `C × H × W` |
+| 数值 | uint8, 0~255 | float32, 0.0~1.0 |
+
+PIL库是 HWC 格式，但 PyTorch 的 Conv2d 等层全按 CHW 解释，必须把图片转成指定格式的Tensor张量，所以**训练/测试集都有ToTensor()。**
+
+**Compose内部增强变换必须放 `ToTensor` 前面**——它们操作的是 PIL Image，而非 Tensor 张量。
+
+
+#### 2.1.3 `datasets.MNIST()`：数据读取
 
 ```python
-from torchvision import datasets, transforms
-
 train_data = datasets.MNIST(
-    root='data',                          # 下载到哪（建议用绝对路径）
-    train=True,                           # True=训练集，False=测试集
-    download=True,                        # 第一次运行下载，之后跳过
-    transform=transforms.ToTensor()       # 对每张图做什么变换
+    root='data',                    # 数据存哪
+    train=True,                     # True=60000 训练集 / False=10000 测试集
+    download=True,                  # 首次运行从网上下载，之后自动跳过
+    transform=train_transform       # 使用前面compose返回的对象进行流水线处理
 )
 ```
 
-返回一个 `Dataset` 对象，`train_data[0]` → `(图片_tensor, 标签)`。
-CIFAR10 写法完全一样，把 `MNIST` 换成 `CIFAR10` 即可。
+`train_data[0]` 被访问时内部做了什么：
 
-#### 2.1.2 `DataLoader()`
+1. 从磁盘读第 0 张图片 → PIL Image（28×28，像素 0~255）
+2. 读标签（整数 0~9）
+3. 如果 `self.transform` 不为空 → `img = self.transform(img)`
+4. 返回 `(img, label)`
 
-```python
-train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
-```
+每次 `train_data[i]` 都重新读磁盘、重新跑 transform。这就是为什么 1.1 说 transform 是懒加载。
 
-`for images, labels in train_loader` 每次吐出一个 batch：
-
-```python
-images.shape  # (64, 通道, 高, 宽)    MNIST: (64, 1, 28, 28)
-labels.shape  # (64,)                 每张图对应的数字 0~9
-```
-
-**参数要点**：`shuffle=True` 训练时打乱，测试时不打乱；`num_workers=0`（主线程）对 MNIST/CIFAR-10 够用，大图才需要多进程；`pin_memory=True` 只在 GPU 训练时有用。
+`CIFAR10` 接口完全一致，只是内部读的是 32×32 彩色图，标签是字符串类别名。
 
 
-#### 2.1.3 `transforms.Compose()` — 数据增强
+#### 2.1.4 `DataLoader()`：数据分批
 
 ```python
-train_transform = transforms.Compose([
-    transforms.RandomHorizontalFlip(),              # 随机水平翻转
-    transforms.RandomRotation(10),                  # 随机旋转 ±10°
-    transforms.ToTensor(),
-])
+for images, labels in train_loader:
 ```
+迭代内部：
 
-**数据增强只在训练集上用**——原理和 sklearn 的"测试集不能用 fit_transform"一样：考试时题目不能改。返回一个函数对象，每张图加载时自动执行。
+1. **排顺序**——`shuffle=True` 时生成随机索引排列 `[3847, 12, 59123, ...]`
+2. **切 batch**——每次取 `batch_size` 个索引，如 `[3847, 12, ..., 777]`（64 个）
+3. **逐条取**——对这 64 个索引 i 依次读取train_data[i]，进行64 次 transform，得到每张图片对应的Tensor
+4. **堆叠（collate）**——默认行为：64 个 tensor 沿 dim=0 堆成 `(64, C, H, W)`，相当于把64张图片的信息堆叠
 
+| 参数 | 作用 |
+|------|------|
+| `batch_size` | 每批多少条 |
+| `shuffle` | True=每个 epoch 开始时重新生成随机索引排列 |
+| `num_workers` | 多进程读数据，0=主线程，MNIST 用 0 够 |
+| `pin_memory` | 锁页内存，仅 GPU 训练时有用 |
 
 ### 2.2 网络层
 
@@ -291,23 +327,31 @@ CNN 模型定义：
 
 ```python
 model = nn.Sequential(
-    nn.Conv2d(1, 16, kernel_size=3, padding=1),   # 1→16 通道
+    nn.Conv2d(3, 16, kernel_size=3, padding=1),     # 3 通道（RGB）
     nn.ReLU(),
-    nn.MaxPool2d(2),                               # 28×28 → 14×14
-    nn.Conv2d(16, 32, kernel_size=3, padding=1),   # 16→32 通道
+    nn.MaxPool2d(2),                                 # 32×32 → 16×16
+
+    nn.Conv2d(16, 32, kernel_size=3, padding=1),
     nn.ReLU(),
-    nn.MaxPool2d(2),                               # 14×14 → 7×7
-    nn.Flatten(),                                  # [batch, 32, 7, 7] → [batch, 1568]
-    nn.Linear(1568, 128),
+    nn.MaxPool2d(2),                                 # 16×16 → 8×8
+
+    nn.Flatten(),
+    nn.Linear(2048, 128),
     nn.ReLU(),
+    nn.Dropout(0.25),                                # ← 随机关 25% 神经元
     nn.Linear(128, 10),
- ).to(device)
+).to(device)
 ```
 
 每个层本质上都是**对输入张量做一次数学运算**。
 **参数（w 和 b）存在层内部，`model.parameters()` 把它们全部暴露给优化器。**
 
-#### 2.2.1 `nn.Linear(in_features, out_features)` — 全连接层
+**请注意：这些函数没有显式把数据传入，因为它们本身就被定义在Sequential中，数据被传入模型后在内部进行逐步处理**
+**这也是Pytorch的设计哲学：define-by-run^^**
+**而Sequential本身也有点像数据读取中的Compose，都是流水线容器**
+
+
+#### 2.2.1 `nn.Linear(in_features, out_features)` — 线性层/全连接层
 
 **底层运算**：
 
@@ -317,12 +361,22 @@ model = nn.Sequential(
                                   输出 y: (batch, out_features)
 ```
 
-即 `z = X @ W.T + b`。和 numpy 手写逻辑回归的 `z = X @ w + b` 是**同一件事**——区别只是 w 从向量 `(7,)` 变成了矩阵，因为输出从 1 个数变成了 out_features 个数。
+即 `z = X @ W.T + b`，和 numpy 手写逻辑回归的 `z = X @ w + b` 是**同一件事**——区别只是 w 从向量 `(7,)` 变成了矩阵，因为输出从 1 个数变成了 out_features 个数。
 
-> **关于 `W.T`**：`nn.Linear(in_features, out_features)` 内部存的权重 shape 是 `(out_features, in_features)`。
-> 前向传播时做 `input @ weight.T + bias`，即 `(batch, in) @ (in, out) + (out,)`。之所以存转置形式，是底层的历史问题——理解成 `in → out` 即可^^。
+**内部工作原理**：
 
-**一个 `nn.Linear(784, 128)` 就是 128 个逻辑回归并排干活**，每个输出神经元和全部 784 个输入相连，各有自己的 784 个权重 + 1 个偏置。参数量 = 784×128 + 128 = 100,480。
+**__init__ 时创建了以下参数：**
+  weight: (out_features, in_features)    ← 初始值是随机的，训练中会被优化器更新
+  bias:   (out_features,)                ← 初始值是 0
+**注意：weights形状与输入相反，所以需要右乘其倒置矩阵，之所以这么设计纯粹是早年底层设计，无需在意**
+
+**前向传播干了什么：**
+  output = input @ weight.T + bias
+  即 (batch, in) @ (in, out) + (out,) → (batch, out)
+
+  把每个样本的 in_features 个输入特征，和 weight 权重矩阵相乘，映射成 out_features 个输出值，每个输出再加一个偏置bias。
+
+所以 **一个 `nn.Linear(784, 128)` 就是 128 个逻辑回归并排干活**，每个输出神经元和全部 784 个输入相连，各有自己的 784 个权重 + 1 个偏置。参数量 = 784×128 + 128 = 100,480。
 
 
 ```python
@@ -337,13 +391,15 @@ nn.Linear(64, 10)      # 输入: (batch, 64)  → 输出: (batch, 10)（10 个�
 
 **原理**：`ReLU(x) = max(0, x)`
 
+**不创建、不存储、不更新任何东西。唯一的作用就是把本层的负数截掉，打破层与层之间的线性关系。**
+
 ```python
 ReLU([-3, -1, 0, 2, 5]) = [0, 0, 0, 2, 5]
 ```
 
 **为什么必须夹在层与层之间**：
 两个 Linear 中间不夹任何东西，`Linear₁ → Linear₂` 数学上 = 一个更大的 `Linear`。
-因为 `(x @ W₁^T) @ W₂^T = x @ (W₁^T @ W₂^T)`，矩阵乘法满足结合律，堆一百层也只等于一层。
+因为 `(x @ W₁^T) @ W₂^T = x @ (W₁^T @ W₂^T)`，矩阵乘法满足结合律，堆多少层也只等于一层。
 
 `ReLU` 不是线性的（没法用矩阵乘法实现"负数清零"），使用它可以给全连接层引入非线性，增加拟合能力。
 所以 `Linear → ReLU → Linear` 无法被合并——每层真的在学不同的东西。
@@ -354,17 +410,46 @@ ReLU([-3, -1, 0, 2, 5]) = [0, 0, 0, 2, 5]
 
 **底层运算**：和 Linear 的全局矩阵乘法不同，卷积是一个 3×3 小窗口在图片上**滑动**，每个位置做一次局部点积。
 
-```
-输入: (batch, in_channels, H, W)
-  ↓  用 out_channels 个 3×3×in_channels 的卷积核在图上滑动
-输出: (batch, out_channels, H', W')
-```
+**内部工作原理**：
 
-**和 Linear 的本质区别**：Linear 看全局（每个输出连接所有输入），Conv2d 看局部（每个输出只看一个 3×3 窗口）。图像上"相邻像素才有关系"——卷积把这条先验知识编码进了模型结构。这就是为什么 CNN 在图片上碾压 MLP。
+__init__ 时创建 weight 和 bias：
+```
+weight: (out_channels, in_channels, kernel_size, kernel_size) 随机初始化，训练中更新
+bias:   (out_channels,) 初始值为 0
+```
+以 `Conv2d(3, 16, kernel_size=3, padding=1)` 为例，前向传播时：
 
-**参数量为什么极小**：`Conv2d(1→16, 3×3)` = 1×16×9 + 16 = **160 个参数**。对比 `Linear(784→128)` 的 100,352 个。卷积靠**权重共享**——同一个 3×3 窗口在整张图上滑动，不管图多大，参数只和窗口有关。
+输入是一张 CIFAR-10 彩色图，shape = (3, 32, 32)：
+把它理解成 3 层 32×32 的纸叠在一起：R 层、G 层、B 层，每层一个二维网格
+**"通道"就是"一层纸"——输入有 3 个通道 = 3 层**
+
+`out_channels=16`个卷积核，shape = [3, 3, 3] = [输入通道数, 高, 宽]
+3 层，每层一个 3×3 的小权重矩阵，共 3×9 = 27 个权重，最终输出 16 层
+**这 3 层和输入的 3 个通道一一对应**
+
+卷积核只在平面上滑动（H 和 W 方向），不在通道方向滑动：
+滑到 (i,j) 时：
+      从 R 层取 3×3 小块 × 卷积核第 1 层权重
+    + 从 G 层取 3×3 小块 × 卷积核第 2 层权重
+    + 从 B 层取 3×3 小块 × 卷积核第 3 层权重
+    + bias
+    = 一个数
+
+>通俗讲：卷积核一次性看完所有通道的同一位置区域，融合成一个数
+
+一个卷积核扫完 32×32 全图，产出结果形状(32,32)——这就是一个输出通道。16 个卷积核，每个产出一个输出通道，所以输出 shape = (16, 32, 32)。
+
+**输出通道不再是 R/G/B，而是 16 种"这个卷积核想检测的东西"**——比如某个通道对边缘敏感，某个对纹理敏感。至于具体检测了什么，由训练决定。
+
+**和 Linear 的本质区别**：Linear 看全局（每个输出连接所有输入），Conv2d 看局部（每个输出只看一个 3×3 窗口）。
+
+**参数量为什么极小**：
+`Conv2d(1, 16, 3)` = 1×16×9 + 16 = **160 个参数**,对比 `Linear(784, 128)` 的 100,352 个。
+卷积靠**权重共享**——同一个 3×3 窗口在整张图上滑动，不管图多大，参数只和窗口有关。
 
 **`padding=1` 干什么**：不做 padding，3×3 卷积后图片会小一圈（28×28 → 26×26）。padding=1 在图片外围补一圈零，输出尺寸和输入一样大，方便堆叠多层。
+
+>图像上"相邻像素才有关系"——卷积把这条先验知识编码进了模型结构。这就是为什么 CNN 在图片上碾压 MLP。
 
 ```python
 # MNIST: 灰度图（1 通道）
@@ -377,35 +462,72 @@ nn.Conv2d(3, 16, kernel_size=3, padding=1)    # (batch, 3, 32, 32) → (batch, 1
 
 #### 2.2.4 `nn.MaxPool2d(kernel_size)` — 最大池化
 
-**做的事**：在 2×2 格子里取最大值，压成一个。`stride` 默认等于 `kernel_size`，窗口不重叠。
+**做的事**：在 kernel_size*kernel_size 的格子里取最大值max，将整格数据压成max。
+每次移动格数`stride` 默认等于 `kernel_size`，以此保证窗口不重叠。
+
+**内部工作原理**：
 
 ```
-[3, 7]
-[1, 5]   →  7
+前向传播时，把输入切分成不重叠的 k×k 小窗口（比如 2×2），
+每个窗口只保留最大值，丢弃其余三个数。
+
+输入 2×2: [3, 7]
+          [1, 5]   →  输出: 7（四个值里最大的那个）
+
+整张图: 28×28 → 切成 14×14 个 2×2 窗口 → 输出 14×14
 ```
 
-**为什么需要**：卷积层只提取特征不缩小尺寸，一直不缩的话计算量会爆炸。Pooling 负责缩小——28×28 → 14×14 → 7×7，每步面积缩到 1/4，也让下一层卷积看到更大范围。
+最大池化不可避免的会丢失大量数据，但这正是它的价值：
+- 降低每层计算量：kernel_size越大，降低越多；卷积层只提取特征不缩小尺寸，一直不缩的话计算量会爆炸。
+- 保留区域最强信号：避免被其他弱信号稀释。
+
+**为什么需要**：Pooling 负责缩小——28×28 → 14×14 → 7×7，每步面积缩到 1/4，也让下一层卷积看到更大范围。
+
+>和卷积的配合逻辑：卷积负责"提取什么"（学习 weight），池化负责"缩尺寸"（固定运算）。
 
 
 #### 2.2.5 `nn.Flatten()` — 拉直
 
 **做的事**：把卷积输出的三维特征图（通道×高×宽）拉成一维向量，才能喂给 Linear。
 
+**内部工作原理**：
+
+```
+前向传播时，保持 batch 维不动，把后面所有维度合并成一个：
+  (batch, 32, 7, 7)  →  (batch, 1568)
+          ↑ 32×7×7=1568 个数字排成一行
+
+数据本身没有修改，只是从三维展成了一维。
+```
+
 ```python
 输入:  (batch, 32, 7, 7)      # batch × 32 通道 × 7×7 特征
 输出:  (batch, 1568)           # batch × 1568 ：1568 个数字排成batch行
 ```
 
-`start_dim=1` 意味着不碰 batch 维度——保留样本数目，64 张图还是 64 张，只把后面的维度拉直。
 **只在即将开始 Linear 处用一次。**
 
 #### 2.2.6 `nn.Dropout(p)` — 随机关闭神经元
 
 **做的事**：每轮训练随机关掉 p 比例的神经元，被关的人这轮"休息"。其他人被迫顶上去，逼出冗余的判断能力。
 
-**训练 vs 测试**：训练时随机关（制造压力），测试时全部在用（要稳定结果）。这两个模式由 `model.train()` 和 `model.eval()` 自动切换。
+**内部工作原理**：
 
-**不是随便用**：实际项目中，CIFAR-10 CNN 加了 Dropout 后准确率从 53.20% **掉到** 49.99%。原因是两层 CNN 远没到过拟合——还在学基础，关神经元等于削弱。
+```
+训练时 model.train()：
+    以概率p，随机把输入张量里面部分元素置0
+
+测试时 model.eval()：
+    什么都不做——输入原样通过，所有神经元都在岗。
+```
+
+`model.train()` 和 `model.eval()` 切换时，Dropout 是行为变化最明显的层——训练时随机关人，测试时全员到齐。
+这就是为什么忘写 `eval()` 测试分数会偏低。
+
+**谨慎使用**：实际项目中，CIFAR-10 CNN 加了 Dropout 后准确率从 53.20% **掉到** 49.99%。
+原因是两层 CNN 远没到过拟合——还在学基础，关神经元等于削弱。
+
+>**这已经被证明是一种有效的正则化技术**
 
 
 ### 2.3 损失函数
@@ -425,7 +547,7 @@ loss.backward()
 
 但它不能直接比较。模型输出的是一堆原始分数（z），有时候正有时候负，跟"概率"不是一回事。**对于分类任务来说**，损失函数内部做了两件事：**分数→概率→loss**。
 
-#### 第一步：分数变概率
+#### 第一步：sigmoid/softmax:分数变概率
 
 **二分类**——sigmoid。输入 1 个实数，输出 1 个 (0,1) 之间的概率：
 
@@ -447,7 +569,7 @@ softmax(z) →
 
 sigmoid 和 softmax 是两个相关的函数——二分类时 softmax 退化成 sigmoid（两个概率相互制约，知道一个就知另一个）。所以理论上二分类也能用 softmax，只是多此一举。
 
-#### 第二步：概率变 loss（交叉熵，Cross-Entropy）
+#### 第二步：Cross-Entropy（交叉熵）:概率变 loss
 
 变成概率之后，怎么用一个数字衡量"猜得有错"？
 
@@ -715,13 +837,13 @@ flowchart TD
 | 忘写 zero_grad | loss 震荡不降 | 梯度累加，越滚越大 | 在 backward 前加 `optimizer.zero_grad()` |
 | 测试集忘设 eval | 测试准确率不对 | Dropout/BatchNorm 行为未切换 | 评估前 `model.eval()`，训练前 `model.train()` |
 | 忘写 no_grad | 显存溢出（大数据时） | 计算图在后台攒着 | 评估时加 `with torch.no_grad()` |
-| 路径用相对路径 | 数据找不到或下到别处 | root 相对路径从不同目录运行会错 | 用 `os.path.dirname(__file__)` 拼绝对路径 |
+| **路径用相对路径** | 数据找不到或下到别处 | root 相对路径从不同目录运行会错 | 用 `os.path.dirname(__file__)` 拼绝对路径 |
 | batch_size 太大 | OOM / 内存溢出 | 显存放不下 | 调小到 32 或 16 |
 | loss 不下降 | 模型完全不学习 | lr 太大/太小、数据有问题 | 先在 200 条数据上做过拟合测试 |
 | 优化后分数更低 | 加 Dropout/增强后准确率降 | 模型还在欠拟合 | 先去 Dropout、加深模型、增加 epoch |
 | 二分类用了 CrossEntropyLoss | 报错或 loss 异常 | CrossEntropy 期望标签是整数 0~C-1 | 二分类用 BCEWithLogitsLoss |
-| Flatten 后 Linear 输入数不对 | shape mismatch | 忘了计算卷积输出尺寸 | 手动算或用 `print(model(x).shape)` 验证 |
+| **Flatten 后 Linear 输入数不对** | shape mismatch | 忘了计算卷积输出尺寸 | **口算**或用 `print(model(x).shape)` 验证 |
 | 训练/测试准确率差距大 | 过拟合 | 模型太强 / 数据太少 | 加 Dropout、数据增强、减小模型 |
 | GPU 不工作 | 任务管理器里 GPU 没动 | 数据和模型没搬上 GPU | 模型 + 每批数据都要 `.to(device)` |
-| 每次跑结果不一样 | 三次跑三个不同分数 | PyTorch 默认不固定随机种子 | 调用 `set_seed(42)`（固定 Python、PyTorch、cuDNN 三个随机源） |
+| **每次跑结果不一样** | 三次跑三个不同分数 | PyTorch 默认不固定随机种子 | 调用 `set_seed(42)`（固定 Python、PyTorch、cuDNN 三个随机源） |
 | `model.eval()` 后代码跑得更快 | 正常现象 | `eval()` 关闭了 Dropout 等操作 | 不是 bug，评估就应该是这个速度 |
