@@ -236,7 +236,7 @@ model.load_state_dict(torch.load('model.pth'))
 ## II. 核心组件
 
 
-### 2.1 数据加载：各组件内部实现
+### 2.1 数据加载
 
 先看完整搭建代码，再逐个拆解：
 
@@ -305,6 +305,8 @@ train_data = datasets.MNIST(
 #### 2.1.4 `DataLoader()`：数据分批
 
 ```python
+train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
+
 for images, labels in train_loader:
 ```
 迭代内部：
@@ -313,6 +315,8 @@ for images, labels in train_loader:
 2. **切 batch**——每次取 `batch_size` 个索引，如 `[3847, 12, ..., 777]`（64 个）
 3. **逐条取**——对这 64 个索引 i 依次读取train_data[i]，进行64 次 transform，得到每张图片对应的Tensor
 4. **堆叠（collate）**——默认行为：64 个 tensor 沿 dim=0 堆成 `(64, C, H, W)`，相当于把64张图片的信息堆叠
+
+>每次迭代返回的`images`就是让机器看的题，`labels`就是题目的标准答案，最终要通过`loss_fn(model(images),labels)`计算loss
 
 | 参数 | 作用 |
 |------|------|
@@ -327,16 +331,16 @@ CNN 模型定义：
 
 ```python
 model = nn.Sequential(
-    nn.Conv2d(3, 16, kernel_size=3, padding=1),     # 3 通道（RGB）
+    nn.Conv2d(1, 16, kernel_size=3, padding=1),     # 1 通道（灰度），输入 28×28
     nn.ReLU(),
-    nn.MaxPool2d(2),                                 # 32×32 → 16×16
+    nn.MaxPool2d(2),                                 # 28×28 → 14×14
 
     nn.Conv2d(16, 32, kernel_size=3, padding=1),
     nn.ReLU(),
-    nn.MaxPool2d(2),                                 # 16×16 → 8×8
+    nn.MaxPool2d(2),                                 # 14×14 → 7×7
 
     nn.Flatten(),
-    nn.Linear(2048, 128),
+    nn.Linear(1568, 128),                            # 32×7×7 = 1568
     nn.ReLU(),
     nn.Dropout(0.25),                                # ← 随机关 25% 神经元
     nn.Linear(128, 10),
@@ -347,11 +351,10 @@ model = nn.Sequential(
 **参数（w 和 b）存在层内部，`model.parameters()` 把它们全部暴露给优化器。**
 
 **请注意：这些函数没有显式把数据传入，因为它们本身就被定义在Sequential中，数据被传入模型后在内部进行逐步处理**
-**这也是Pytorch的设计哲学：define-by-run^^**
-**而Sequential本身也有点像数据读取中的Compose，都是流水线容器**
+**Sequential本身也有点像数据读取中的Compose，都是流水线容器**
 
 
-#### 2.2.1 `nn.Linear(in_features, out_features)` — 线性层/全连接层
+#### 2.2.1 `nn.Linear(in_features, out_features)`：线性层/全连接层
 
 **底层运算**：
 
@@ -387,7 +390,7 @@ nn.Linear(64, 10)      # 输入: (batch, 64)  → 输出: (batch, 10)（10 个�
 ```
 
 
-#### 2.2.2 `nn.ReLU()` — 激活函数
+#### 2.2.2 `nn.ReLU()`：激活函数
 
 **原理**：`ReLU(x) = max(0, x)`
 
@@ -406,7 +409,7 @@ ReLU([-3, -1, 0, 2, 5]) = [0, 0, 0, 2, 5]
 激活函数还有 Sigmoid、Tanh、GELU 等变体，但 ReLU 相对好理解。
 
 
-#### 2.2.3 `nn.Conv2d(in_channels, out_channels, kernel_size, padding)` — 卷积层
+#### 2.2.3 `nn.Conv2d(in_channels, out_channels, kernel_size, padding)`：卷积层
 
 **底层运算**：和 Linear 的全局矩阵乘法不同，卷积是一个 3×3 小窗口在图片上**滑动**，每个位置做一次局部点积。
 
@@ -460,7 +463,7 @@ nn.Conv2d(3, 16, kernel_size=3, padding=1)    # (batch, 3, 32, 32) → (batch, 1
 ```
 
 
-#### 2.2.4 `nn.MaxPool2d(kernel_size)` — 最大池化
+#### 2.2.4 `nn.MaxPool2d(kernel_size)`：最大池化
 
 **做的事**：在 kernel_size*kernel_size 的格子里取最大值max，将整格数据压成max。
 每次移动格数`stride` 默认等于 `kernel_size`，以此保证窗口不重叠。
@@ -486,7 +489,7 @@ nn.Conv2d(3, 16, kernel_size=3, padding=1)    # (batch, 3, 32, 32) → (batch, 1
 >和卷积的配合逻辑：卷积负责"提取什么"（学习 weight），池化负责"缩尺寸"（固定运算）。
 
 
-#### 2.2.5 `nn.Flatten()` — 拉直
+#### 2.2.5 `nn.Flatten()`：拉直
 
 **做的事**：把卷积输出的三维特征图（通道×高×宽）拉成一维向量，才能喂给 Linear。
 
@@ -507,7 +510,7 @@ nn.Conv2d(3, 16, kernel_size=3, padding=1)    # (batch, 3, 32, 32) → (batch, 1
 
 **只在即将开始 Linear 处用一次。**
 
-#### 2.2.6 `nn.Dropout(p)` — 随机关闭神经元
+#### 2.2.6 `nn.Dropout(p)`：随机关闭神经元
 
 **做的事**：每轮训练随机关掉 p 比例的神经元，被关的人这轮"休息"。其他人被迫顶上去，逼出冗余的判断能力。
 
@@ -532,24 +535,49 @@ nn.Conv2d(3, 16, kernel_size=3, padding=1)    # (batch, 3, 32, 32) → (batch, 1
 
 ### 2.3 损失函数
 
-多分类任务中损失函数：
+损失函数回答一个问题：**模型猜的答案和真实答案差多少？** 差得多就罚重一点，反向传播时梯度大，参数调得猛；差得少就轻罚。
+
+模型输出的是一堆原始分数（z），有时候正有时候负，不能直接和标签比较。**分类任务中，损失函数内部做了两件事：**
+
+```
+原始分数(z)  →  sigmoid / softmax     →     Cross-Entropy(-log)  →      loss
+                  ↑ 第一步                          ↑ 第二步
+                  输出变概率                      概率变"错多大"
+```
+
+PyTorch 提供了两个封装好这两步的损失函数：
+
+| | BCEWithLogitsLoss | CrossEntropyLoss |
+|---|---|---|
+| 输出转概率函数 | sigmoid | softmax |
+| 概率转loss函数 | 二分类交叉熵 | 多分类交叉熵 |
+| 适用场景 | 二分类 | 多分类（3 类及以上） |
+| 标签格式 | 0.0 或 1.0（float） | 0, 1, 2...（long，类别编号） |
+| 示例 | 泰坦尼克 | MNIST, CIFAR-10 |
+
+> 两个损失函数默认都对 batch 内所有样本**取平均**（`reduction='mean'`），返回一个**标量**。
+
+**训练循环中的实际用法**
 
 ```python
+# 多分类（MNIST / CIFAR-10）
 loss_fn = nn.CrossEntropyLoss()
+outputs = model(images)          # (batch_size, 10)，原始分数，不要 softmax
+loss = loss_fn(outputs, labels)  # 返回一个标量：batch 内所有样本 loss 的平均值
+loss.backward()
 
-# 训练循环中：
-outputs = model(images)
-loss = loss_fn(outputs, labels)    # 10 个分数 vs 正确数字，算出差多少
+# 二分类（泰坦尼克）
+loss_fn = nn.BCEWithLogitsLoss()
+outputs = model(x).squeeze()     # (batch_size,)，1 个原始分数
+loss = loss_fn(outputs, y)       # 返回一个标量：batch 内所有样本 loss 的平均值
 loss.backward()
 ```
 
-损失函数回答一个问题：**模型猜的答案和真实答案差多少？** 差得多就罚重一点，反向传播时梯度大，参数调得猛；差得少就轻罚。
+#### 2.3.1 sigmoid/softmax：输出变概率 
 
-但它不能直接比较。模型输出的是一堆原始分数（z），有时候正有时候负，跟"概率"不是一回事。**对于分类任务来说**，损失函数内部做了两件事：**分数→概率→loss**。
+两个函数做的事看起来差不多："把任意实数压成 (0,1) 之间的概率"。但底层逻辑完全不同。
 
-#### 第一步：sigmoid/softmax:分数变概率
-
-**二分类**——sigmoid。输入 1 个实数，输出 1 个 (0,1) 之间的概率：
+**sigmoid：各管各的，互不干扰**
 
 ```
 z = 5.0  →  sigmoid(5.0) = 0.993   # 大概率是 1
@@ -557,72 +585,106 @@ z = 0.0  →  sigmoid(0.0) = 0.500   # 完全不确定
 z = -3.0 →  sigmoid(-3.0) = 0.047  # 大概率是 0
 ```
 
-**多分类**——softmax。输入 N 个实数，输出 N 个概率，**加起来等于 1**：
+sigmoid 只盯自己这一个分数，不管别人。10 个输出全部走 sigmoid，10 个概率加起来可能是 8.3，也可能只有 0.37——**没有"总和为 1"的约束**。
 
-假设模型对一张"7"的图片输出了 10 个分数
+这意味着 sigmoid 回答的是**独立的判断题**。
+
+**softmax：互相竞争，此消彼长**
+
+假设模型对一张"7"的图片输出了 10 个分数：
+
 ```
 z = [0.2, 0.1, 0.5, 0.3, 1.2, 0.8, 2.0, 5.0, 0.4, 0.6]
-softmax(z) →
-  [0.006, 0.005, 0.008, 0.006, 0.016, 0.011, 0.036, 0.902, 0.008, 0.008]
-                                                     ↑ 数字 7 ：概率 90.2%
+
+softmax:  所有分数取 exp → 全部除以总和 → 强制概率和为 1
+        [0.006, 0.005, 0.008, 0.006, 0.016, 0.011, 0.036, 0.902, 0.008, 0.008]
+                                                            ↑ 数字 7：90.2%
 ```
 
-sigmoid 和 softmax 是两个相关的函数——二分类时 softmax 退化成 sigmoid（两个概率相互制约，知道一个就知另一个）。所以理论上二分类也能用 softmax，只是多此一举。
+softmax 看的是**所有 N 个分数之间的关系**——抬高一个概率，必然压低其他全部。模型不能同时说"90% 是 7"和"90% 是 3"，概率池总共就 100%。
 
-#### 第二步：Cross-Entropy（交叉熵）:概率变 loss
+**核心区别**：
 
-变成概率之后，怎么用一个数字衡量"猜得有错"？
+> **sigmoid 做"是不是"——N 道独立的是非题。softmax 做"是哪一个"——N 选 1 的单选题。**
 
-直觉：正确答案的那个位置，我想要它的概率**越高越好**。那就对它取个 `-log`——因为 -log 的曲线天然满足这个需求：
+这决定了它们各自的使用场景：
+
+| | sigmoid | softmax |
+|---|---|---|
+| 概率关系 | 独立，各管各 | 互斥，总和为 1 |
+| 适用场景 | 二分类、**多标签分类**（一张图同时有猫又有狗） | **多分类**（一个数字只能是 7 不能同时是 3） |
+| 模型在学什么 | 每道题独立判断"是/不是" | 所有类别竞赛，选最可能的 |
+
+二分类是特例：两个概率此消彼长，知道一个就知另一个。此时 softmax 等价于对两个分数之差做 sigmoid，所以二分类用哪个损失函数都可以，BCEWithLogitsLoss 更直接。
+
+**这就解释了为什么 MNIST 不能把 CrossEntropyLoss 换成 BCEWithLogitsLoss**：
+不是因为"接口不匹配"——技术上完全可以把 10 个输出每个接一个 sigmoid，但这等于问 10 道独立的是非题，模型会偷懒。
+而 MNIST 的标签本身就是互斥的（一个数字不能同时是 7 和 3），softmax 把这个先验知识编码进了数学——让 10 个类别互相竞争，梯度推动赢家通吃。
+
+
+#### 2.3.2 Cross-Entropy（交叉熵）：概率变 loss
+
+概率有了，怎么用一个数字衡量"猜得有多错"？
+
+直觉：正确答案的那个位置，概率**越高越好**。那就对它取 `-log`——因为 -log 曲线天然满足：
 
 ```
-概率 = 0.9  →  -log(0.9) = 0.105    （猜得不错，轻轻罚一下）
-概率 = 0.5  →  -log(0.5) = 0.693    （一半一半，差不多罚一下）
-概率 = 0.01 →  -log(0.01) = 4.605   （错到离谱，往死里罚）
+概率 = 0.9  →  -log(0.9) = 0.105    （猜得不错，略罚）
+概率 = 0.5  →  -log(0.5) = 0.693    （一半一半，中罚）
+概率 = 0.01 →  -log(0.01) = 4.605   （错到离谱，严罚）
 ```
 
--log(1) = 0（完美预测，零惩罚），而概率越小 -log 增长越猛——这就是交叉熵的核心：**放大自信犯错**。模型越笃信错误答案，惩罚越重。
+-log(1) = 0（完美），概率越小，-log 增长越猛。这就是 Cross-Entropy 的核心效果：**放大自信犯错**——模型越笃信错误答案，惩罚越重。
 
-所以整个损失函数做的事，就是：
+具体到公式上，二分类和多分类的差异来自第一步的概率结构：
 
 ```
-原始分数 → sigmoid/softmax → 概率 → -log(正确类别的概率) → 所有样本取平均
+二分类（sigmoid 产出一个概率 p，标准答案 y ）:
+    loss = -[ y·log(p) + (1-y)·log(1-p) ]
+```
+**易知y必为1/0，因此必定有且只有一项非零**
+- 取1时，p越大模型猜的越准，loss越小；p越小模型猜的越差，loss越大
+- 取0时，反之同理
+
+```
+多分类（softmax 产出 N 个概率，总和为 1）:
+    loss = -log(p_correct)
+           ↑ 只取正确答案位置的概率
+           因为 softmax 已经强制了"此消彼长"——压低错误项的唯一办法就是抬高正确项
+```
+**多分类只有一个项，因为 softmax 已经把"互相制约"写进了概率本身——正确答案概率上去，其余自然下来，不需要逐个罚。**
+
+所以整个损失函数做的事：
+
+```
+原始分数 → sigmoid/softmax → Cross-Entropy(-log) → 所有样本取平均
 ```
 
-用一个数字概括了"模型整体上有多错"。这个数字越小越好。loss = 2.3 说明模型平均信心不足；loss = 0.05 说明基本全对。
+**用一个数字概括了"模型整体上有多错"。loss = 2.3 说明不足；loss = 0.05 说明基本全对。**
 
-#### 为什么不手动分两步做
+**为什么不手动分两步做？**
 
 ```python
-# 先 sigmoid 再算交叉熵
 p = torch.sigmoid(z)
 loss = -(y * torch.log(p) + (1-y) * torch.log(1-p)).mean()
-
-# 但不建议。因为 torch.log(p) 在 p≈0 时会炸（log(0) = -inf）
 ```
 
-所以 `BCEWithLogitsLoss` 和 `CrossEntropyLoss` 把两步合在一起，传原始分数就行，不用手动 sigmoid/softmax。
+`torch.log(p)` 在 p ≈ 0 时会炸（log(0) = -inf）。
 
-#### 两个损失函数的对比
-
-| | BCEWithLogitsLoss | CrossEntropyLoss |
-|---|---|---|
-| 用在 | 二分类 | 多分类（3 类及以上） |
-| 分数→概率 | sigmoid | softmax |
-| 标签格式 | 0.0 或 1.0（float） | 0, 1, 2...（long，类别编号） |
-| 示例 | 泰坦尼克（二分类） | MNIST, CIFAR-10（多分类） |
-
-**为什么不能互换**：MNIST 模型输出的是 `(batch, 10)`，10 个分数。CrossEntropyLoss 期望的就是 10 个分数，内部 softmax + 交叉熵。
-BCEWithLogitsLoss 期望的是 1 个分数。如果硬把 10 个分数传给 BCE，语义就不对了——除非手动拆成 10 个独立的二分类任务，但那是自找麻烦。
+**`BCEWithLogitsLoss` 和 `CrossEntropyLoss` 内部用 log-sum-exp 等数值技巧把两步合并了**，传原始分数即可。
+**模型最后一层不要加 sigmoid/softmax——损失函数内部已经包了。**
 
 
 ### 2.4 优化器与调度器
 
-训练循环中用法：
+用法：
 
 ```python
-optimizer = optim.SGD(model.parameters(), lr=0.01)
+
+# 提前声明：
+optimizer = optim.SGD(model.parameters(), lr=0.01) # 必选
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)  # 可选
+
 # 训练循环中：
 optimizer.zero_grad()     # 清梯度
 outputs = model(images)   # 前向
@@ -672,7 +734,8 @@ for epoch in range(epochs):
 optimizer = optim.SGD(model.parameters(), lr=0.01)
 ```
 
-`model.parameters()` 返回模型所有层的 w 和 b，优化器靠这个列表知道"我该管哪些数字"。`backward()` 算出梯度，`step()` 真的去调——这两个必须成对出现，一个算方向，一个迈步子。
+`model.parameters()` 返回模型所有层的 w 和 b，优化器靠这个列表知道"我该管哪些数字"。
+`backward()` 算出梯度，`step()` 真的去调——这两个必须成对出现，一个算方向，一个迈步子。
 
 **lr 怎么选**：太大 → 冲过头，loss 震荡不收敛；太小 → 学太慢。
 0.01 是安全的默认值。还有 Adam 等变体（自动调步长），先用 SGD 理解本质。
@@ -750,9 +813,9 @@ optimizer = optim.SGD(model.parameters(), lr=0.01)
 | **MNIST 准确率** | 93.74% | 97.90% | 97.26% |
 | **CIFAR-10 准确率** | 41.18% | 53.20% | 49.99% |
 
-> 参数量计算：
-> MLP: `Linear(784→128)` = 784×128+128 = 100,480；`Linear(128→64)` = 128×64+64 = 8,256；`Linear(64→10)` = 64×10+10 = 650。合计 ≈ 10.9 万。
-> CNN: `Conv2d(1→16,3×3)` = 1×16×9+16 = 160；`Conv2d(16→32,3×3)` = 16×32×9+32 = 4,640；`Linear(1568→128)` = 1568×128+128 = **200,832**；`Linear(128→10)` = 128×10+10 = 1,290。合计 ≈ 20.7 万。
+> 参数量计算（MNIST）：
+> MLP: `nn.Linear(784, 128)` = 784×128+128 = 100,480；`nn.Linear(128, 64)` = 128×64+64 = 8,256；`nn.Linear(64, 10)` = 64×10+10 = 650。合计 ≈ 10.9 万。
+> CNN: `nn.Conv2d(1, 16, 3)` = 1×16×9+16 = 160；`nn.Conv2d(16, 32, 3)` = 16×32×9+32 = 4,640；`nn.Linear(1568, 128)` = 1568×128+128 = **200,832**；`nn.Linear(128, 10)` = 128×10+10 = 1,290。合计 ≈ 20.7 万。
 > CNN 的参数**绝大多数在分类头**（最后的 Linear），卷积层参数极少——因为权重共享。
 
 ### 3.2 为什么 CNN 在图像上比 MLP 强那么多？
