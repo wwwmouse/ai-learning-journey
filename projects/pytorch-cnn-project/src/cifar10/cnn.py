@@ -1,4 +1,5 @@
-# CIFAR-10 CNN — 两层卷积在 32×32 彩色图上的表现
+# CIFAR-10 CNN —— 和 cnn_optimized 用同一套模型，变量仅为"是否数据增强"
+# 5 层卷积 + BatchNorm，50 epoch 训练。
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -24,41 +25,58 @@ def main():
     train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
     test_loader  = DataLoader(test_data, batch_size=64, shuffle=False)
 
-    # ===== 模型：Conv→Pool→Conv→Pool→Flatten→Linear→Linear =====
+    # ===== 模型（5 层 CNN + BatchNorm，同 cnn_optimized）=====
     model = nn.Sequential(
-        # 第 1 块
-        nn.Conv2d(3, 16, kernel_size=3, padding=1),    # 3 通道（RGB），MNIST 是 1
+        nn.Conv2d(3, 16, 3, padding=1),
+        nn.BatchNorm2d(16),
         nn.ReLU(),
-        nn.MaxPool2d(2),                                 # 32×32 → 16×16
+        nn.MaxPool2d(2),            # 32×32 → 16×16
 
-        # 第 2 块
-        nn.Conv2d(16, 32, kernel_size=3, padding=1),
+        nn.Conv2d(16, 32, 3, padding=1),
+        nn.BatchNorm2d(32),
         nn.ReLU(),
-        nn.MaxPool2d(2),                                 # 16×16 → 8×8
+        nn.MaxPool2d(2),            # 16×16 → 8×8
 
-        # 分类头
-        nn.Flatten(),                                    # [batch, 32, 8, 8] → [batch, 2048]
-        nn.Linear(2048, 128),
+        nn.Conv2d(32, 32, 3, padding=1),
+        nn.BatchNorm2d(32),
         nn.ReLU(),
+
+        nn.Conv2d(32, 64, 3, padding=1),
+        nn.BatchNorm2d(64),
+        nn.ReLU(),
+
+        nn.Conv2d(64, 128, 3, padding=1),
+        nn.BatchNorm2d(128),
+        nn.ReLU(),
+        nn.MaxPool2d(2),            # 8×8 → 4×4
+
+        nn.Flatten(),               # 128 × 4 × 4 = 2048
+        nn.Linear(2048, 512),
+        nn.ReLU(),
+        nn.Dropout(0.25),
+        nn.Linear(512, 128),
+        nn.ReLU(),
+        nn.Dropout(0.25),
         nn.Linear(128, 10),
     ).to(device)
 
     loss_fn = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
 
     # ===== 训练 =====
-    epochs = 10
+    epochs = 50
     train_losses, test_accs = [], []
 
     for epoch in range(epochs):
         avg_loss = train_one_epoch(model, train_loader, loss_fn, optimizer, device)
         acc = evaluate(model, test_loader, device)
+        scheduler.step()
 
         train_losses.append(avg_loss)
         test_accs.append(acc)
         print(f"epoch {epoch+1:2d}: train_loss={avg_loss:.4f}, test_acc={acc:.2f}%")
-        # epoch 10: train_loss=1.2876, test_acc=53.20%
-
+        # epoch 50: train_loss=0.0749, test_acc=76.88%
     # ===== 保存 =====
     IMAGES_DIR = os.path.join(PROJECT_DIR, 'images')
     MODELS_DIR = os.path.join(PROJECT_DIR, 'models')

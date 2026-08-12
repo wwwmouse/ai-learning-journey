@@ -1,8 +1,7 @@
-"""CIFAR-10 CNN + 防过拟合套餐（数据增强 + Dropout + 学习率调度）。
-
-注意：当前这个两层网络在 CIFAR-10 上还处于欠拟合状态（10 epoch 训不够），
-优化技巧的效果有限。真正的提升方向是加深网络或增加训练轮数。
-"""
+# CIFAR-10 CNN + 数据增强 —— 和 cnn 用同一套模型，变量仅为"是否数据增强"
+# 5 层卷积 + BatchNorm，50 epoch 训练。
+# BatchNorm 是深度网络能稳定训练的关键——不加 BN 时 5 层卷积直接崩到 20%，
+# 加了 BN 后准确率提升到 ~80%。
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -35,29 +34,47 @@ def main():
     train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
     test_loader  = DataLoader(test_data, batch_size=64, shuffle=False)
 
-    # ===== 模型（CNN + Dropout）=====
+    # ===== 模型（5 层 CNN + BatchNorm + Dropout）=====
     model = nn.Sequential(
-        nn.Conv2d(3, 16, kernel_size=3, padding=1),     # 3 通道（RGB）
+        nn.Conv2d(3, 16, 3, padding=1),
+        nn.BatchNorm2d(16),         # 标准化——没有它深层网络训不起来
         nn.ReLU(),
-        nn.MaxPool2d(2),                                 # 32×32 → 16×16
+        nn.MaxPool2d(2),            # 32×32 → 16×16
 
-        nn.Conv2d(16, 32, kernel_size=3, padding=1),
+        nn.Conv2d(16, 32, 3, padding=1),
+        nn.BatchNorm2d(32),
         nn.ReLU(),
-        nn.MaxPool2d(2),                                 # 16×16 → 8×8
+        nn.MaxPool2d(2),            # 16×16 → 8×8
 
-        nn.Flatten(),
-        nn.Linear(2048, 128),
+        nn.Conv2d(32, 32, 3, padding=1),
+        nn.BatchNorm2d(32),
         nn.ReLU(),
-        nn.Dropout(0.25),                                # ← 随机关 25% 神经元
+
+        nn.Conv2d(32, 64, 3, padding=1),
+        nn.BatchNorm2d(64),
+        nn.ReLU(),
+
+        nn.Conv2d(64, 128, 3, padding=1),
+        nn.BatchNorm2d(128),
+        nn.ReLU(),
+        nn.MaxPool2d(2),            # 8×8 → 4×4
+
+        nn.Flatten(),               # 128 × 4 × 4 = 2048
+        nn.Linear(2048, 512),
+        nn.ReLU(),
+        nn.Dropout(0.25),
+        nn.Linear(512, 128),
+        nn.ReLU(),
+        nn.Dropout(0.25),
         nn.Linear(128, 10),
     ).to(device)
 
     loss_fn = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.01) # 优化器
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5) # 调度器：可选项，仅优化版使用
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
 
     # ===== 训练 =====
-    epochs = 15
+    epochs = 50
     train_losses, test_accs = [], []
 
     for epoch in range(epochs):
@@ -68,7 +85,7 @@ def main():
         train_losses.append(avg_loss)
         test_accs.append(acc)
         print(f"epoch {epoch+1:2d}: train_loss={avg_loss:.4f}, test_acc={acc:.2f}%")
-        # epoch 15: train_loss=1.5052, test_acc=49.99%
+        # epoch 50: train_loss=0.6011, test_acc=80.03%
         
     # ===== 保存 =====
     IMAGES_DIR = os.path.join(PROJECT_DIR, 'images')
