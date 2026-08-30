@@ -85,7 +85,7 @@ for step in range(2001):
 
 **和 sklearn 最大的区别**：sklearn 的 `fit()` 是黑盒，PyTorch 的**训练循环必须自己写**。
 
-### 1.1 数据加载（DataLoader）
+### 1.1 数据加载
 
 sklearn 阶段，泰坦尼克 623 条数据一次全传 `model.fit(X, y)`，内存装得下；MNIST 有 60000 张图，一次全塞内存不友好。
 所以需要分批喂——这就是数据加载要解决的问题。
@@ -106,9 +106,9 @@ sklearn 阶段，泰坦尼克 623 条数据一次全传 `model.fit(X, y)`，内�
 
 两个关键认知：
 
-**① transform 是懒加载**。`datasets.MNIST(transform=...)` 只是记下"将来用这个函数"，不调用。真正调用是在 `train_data[0]` 取数据那一刻——从磁盘读到 PIL Image，立刻丢给 transform。所以 `RandomHorizontalFlip` 每次取同一张图都可能不同，这才是数据增强的本质。
+**1. transform 是懒加载**。`datasets.MNIST(transform=...)` 只是记下"将来用这个函数"，不调用。真正调用是在 `train_data[0]` 取数据那一刻——从磁盘读到 PIL Image，立刻丢给 transform。所以 `RandomHorizontalFlip` 每次取同一张图都可能不同，这才是数据增强的本质。
 
-**② shape 在这条链路里变了两次**：
+**2. shape 在这条链路里变了两次**：
 
 ```
 Dataset 取出单条 → transform 处理后          → DataLoader 堆叠后
@@ -118,7 +118,7 @@ PIL, H×W           tensor, (1, 28, 28)        (64, 1, 28, 28)
 
 `(batch, 通道, 高, 宽)` 是 PyTorch 所有视觉层的硬约定，Conv2d 等都按这个顺序读。
 
-#### 参数速查
+**参数速查**
 
 - **`batch_size`**：每批多少张。太小（8）梯度不稳，太大（512）显存放不下。CPU 训练用 64。
 - **`shuffle`**：训练集打乱，测试集不打。不打乱的话模型会记住标签顺序而不是图片特征。
@@ -923,7 +923,7 @@ optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 
 ---
 
-## III. MLP vs CNN 对比
+## III. 实验结论
 
 ### 3.1 模型总览
 

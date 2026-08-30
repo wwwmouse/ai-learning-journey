@@ -15,7 +15,7 @@ titanic_project/
 ├── models/                 # 调参后的随机森林模型
 ├── requirements.txt
 ├── README.md
-└── LEARNING.md
+
 ```
 
 ## 运行方法
@@ -65,7 +65,3 @@ python /path/to/titanic_project/src/explore.py
 逻辑回归在本数据集上 F1 最均衡。性别和舱位等级是强线性信号，逻辑回归天然适配。
 
 随机森林调参后准确率最高（0.802），但存活召回率始终在 0.66 左右——现有 7 个特征无法区分那些「按常理应该死却活了」的人。提升的真正方向不是继续调参，而是构造新特征（家庭规模、姓名称谓等）。
-
-## 学习总结
-
-见 `LEARNING.md`
