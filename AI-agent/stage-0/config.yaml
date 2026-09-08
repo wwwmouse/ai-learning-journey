@@ -1,0 +1,4 @@
+max_tokens: 4096
+model: claude-sonnet-5
+name: my-agent
+temperature: 0.3
