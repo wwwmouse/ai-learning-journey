@@ -28,7 +28,7 @@ pip install -r requirements.txt
 ### 运行脚本
    
 ```python
-python cifar10_analysis.py
+python cifar-10.py
 ```
 
 注意: 第一次运行会**自动下载 CIFAR-10 数据集**（约 170MB，保存到 `./data` 目录）
@@ -39,8 +39,8 @@ python cifar10_analysis.py
 | 输出文件 | 预览 |
 |---------|------|
 | 类别分布 | ![类别分布](results-pictures/类别分布柱状图.png) |
-| RGB直方图 | ![RGB直方图](results-pictures/随机样本拼图.png) |
-| 样本拼图 | ![样本拼图](results-pictures/RGB像素分布直方图.png) |
+| RGB直方图 | ![RGB直方图](results-pictures/RGB像素分布直方图.png) |
+| 样本拼图 | ![样本拼图](results-pictures/随机样本拼图.png) |
 
 ## 数据集概况
 
