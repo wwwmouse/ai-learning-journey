@@ -94,51 +94,51 @@ for name, model in models.items():
       acc = accuracy_score(y_test, y_pred)
       print(f'\n--- {name} ---')
       print(f'准确率: {acc:.4f}')
-      print(classification_report(y_test, y_pred))
+      print(classification_report(y_test, y_pred,digits=3))
 
 # --- KNN ---
 # 准确率: 0.7873
 #               precision    recall  f1-score   support
 
-#            0       0.81      0.85      0.83       165
-#            1       0.74      0.68      0.71       103
+#            0       0.810      0.855      0.832       165
+#            1       0.745      0.680      0.711       103
 
-#     accuracy                           0.79       268
-#    macro avg       0.78      0.77      0.77       268
-# weighted avg       0.79      0.79      0.79       268
+#     accuracy                             0.787       268
+#    macro avg       0.778      0.767      0.771       268
+# weighted avg       0.785      0.787      0.785       268
 
 # --- 逻辑回归 ---
 # 准确率: 0.7948
 #               precision    recall  f1-score   support
 
-#            0       0.82      0.85      0.84       165
-#            1       0.74      0.71      0.73       103
+#            0       0.824      0.848      0.836       165
+#            1       0.745      0.709      0.726       103
 
-#     accuracy                           0.79       268
-#    macro avg       0.78      0.78      0.78       268
-# weighted avg       0.79      0.79      0.79       268
+#     accuracy                             0.795       268
+#    macro avg       0.784      0.779      0.781       268
+# weighted avg       0.793      0.795      0.794       268
 
 # --- 决策树 ---
 # 准确率: 0.7910
 #               precision    recall  f1-score   support
 
-#            0       0.79      0.91      0.84       165
-#            1       0.81      0.60      0.69       103
+#            0       0.785      0.909      0.843       165
+#            1       0.805      0.602      0.689       103
 
-#     accuracy                           0.79       268
-#    macro avg       0.80      0.76      0.77       268
-# weighted avg       0.79      0.79      0.78       268
+#     accuracy                             0.791       268
+#    macro avg       0.795      0.756      0.766       268
+# weighted avg       0.793      0.791      0.784       268
 
 # --- 随机森林 ---
 # 准确率: 0.7910
 #               precision    recall  f1-score   support
 
-#            0       0.80      0.87      0.84       165
-#            1       0.76      0.66      0.71       103
+#            0       0.804      0.873      0.837       165
+#            1       0.764      0.660      0.708       103
 
-#     accuracy                           0.79       268
-#    macro avg       0.78      0.77      0.77       268
-# weighted avg       0.79      0.79      0.79       268
+#     accuracy                           0.791       268
+#    macro avg       0.784      0.766      0.773       268
+# weighted avg       0.789      0.791      0.788       268
 
 results = {
       'KNN':      0.7873,
@@ -220,15 +220,15 @@ print(f'测试集分数: {grid.score(X_test, y_test):.4f}')
 best_model = grid.best_estimator_ # 记录最优模型
 y_pred_best = best_model.predict(X_test) # 记录最优模型的测试答案
 print('\n调参后分类报告:')
-print(classification_report(y_test, y_pred_best)) # 输出最优模型的分类报告
+print(classification_report(y_test, y_pred_best,digits=3)) # 输出最优模型的分类报告
 # 调参后分类报告:
 #             precision    recall  f1-score   support
 
-#         0       0.81      0.89      0.85       165
-#         1       0.79      0.66      0.72       103
-# accuracy                            0.80       268
-# macro avg       0.80      0.78      0.78       268
-# weighted avg    0.80      0.80      0.80       268
+#         0       0.808      0.891      0.847       165
+#         1       0.791      0.660      0.720       103
+# accuracy                              0.802       268
+# macro avg       0.799      0.776      0.783       268
+# weighted avg    0.801      0.802      0.798       268
 
 # 保存模型
 models_dir = os.path.join(PROJECT_DIR, '..', 'models')
