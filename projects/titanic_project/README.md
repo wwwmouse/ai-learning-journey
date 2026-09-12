@@ -8,16 +8,34 @@
 titanic_project/
 ├── data/train.csv          # 原始数据（891行×12列）
 ├── src/
-│   ├── explore.py          # 数据探索与可视化
-│   ├── preprocess.py       # 数据预处理
-│   ├── train.py            # 模型训练、对比、调参、评估
-│   └── experiment_threshold.py  # 复现「四组排查」与「四条候选路线」的全部数字
+│   ├── titanic_common.py        # 两个排查脚本共用的数据与工具（同一份切分/预处理）
+│   ├── explore.py               # 数据探索与可视化
+│   ├── preprocess.py            # 数据预处理
+│   ├── train.py                 # 模型训练、对比、调参、评估
+│   ├── check_saturation.py      # 【排查之一】模型侧饱和了吗（四项检查）
+│   └── explore_routes.py        # 【排查之二】候选路线往哪走（四条路线）
 ├── images/                 # 所有输出图表（7张）
 ├── models/                 # 调参后的随机森林模型
 ├── requirements.txt
 ├── README.md
 
 ```
+
+### 两个排查脚本的关系（顺序不能反）
+
+```text
+check_saturation.py  ──→  explore_routes.py
+模型侧还调得动吗？            换方向：往哪加信息？
+├ ① 收敛 / ② 容量            ├ 调阈值（不产生新信息）
+├ ③ 规模 / ④ 超参            ├ 类别加权（提召回掉精确率）
+└ 四项全排除 → 饱和            └ 加「称谓」← 唯一有效的
+```
+
+**先证明"调参这条路走死了"，才有资格说"要加特征"。** 顺序反了就是拍脑袋。
+
+> 这两个脚本**共用 `titanic_common.py` 的数据准备**，保证两边的"基线"是同一个数
+> （同一个随机森林基线 0.7910）。早期版本把两件事塞在一个脚本里，导致
+> "规模/超参"的 0.8022 和"候选路线"的 0.7985 口径混淆，说不清差在哪。
 
 ## 运行方法
 
@@ -33,14 +51,16 @@ pip install -r requirements.txt
 python src/explore.py
 python src/preprocess.py
 python src/train.py
-python src/experiment_threshold.py   # 复现结论里的全部数字（约 2 分钟）
+python src/check_saturation.py   # 排查之一：四项检查（含网格搜索，约 1 分钟）
+python src/explore_routes.py     # 排查之二：四条候选路线
 
 # 方式二：进入 src 目录运行
 cd src
 python explore.py
 python preprocess.py
 python train.py
-python experiment_threshold.py
+python check_saturation.py
+python explore_routes.py
 
 # 方式三：从任意目录直接用绝对路径运行
 python /path/to/titanic_project/src/explore.py
