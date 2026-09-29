@@ -939,8 +939,9 @@ optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 
 ### 2.6 预训练与迁移学习
 
-前面 2.2 讲的是**结构**——手写 `nn.Sequential`，或者用 `torchvision.models` 里的现成网络。
-但"网络长什么样"和"权重从哪来"是两个独立的选择。`nn.Linear` / `nn.Conv2d` 在 `__init__` 时就随机填好了权重，这是**从零训练（from scratch）**的起点；而工业界更常见的做法是把这个起点整个换掉：
+前面 2.2 讲的是**手搭结构**——用 `nn.Sequential` 一层层把算子拼起来。
+这一节补两件它没覆盖的事：**用 `torchvision.models` 调现成网络**，以及更重要的——**权重从哪来**。
+`nn.Linear` / `nn.Conv2d` 在 `__init__` 时就随机填好了权重，这是**从零训练（from scratch）**的起点；而工业界更常见的做法是把这个起点整个换掉：
 
 ```
 从零训练：weights=None          → 随机初始化，全部知识靠数据一点点爬
