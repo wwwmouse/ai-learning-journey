@@ -144,5 +144,5 @@ Python 3.14 / PyTorch 2.13.0+cu130 / torchvision 0.28.0 / matplotlib / numpy
 
 ## 相关笔记
 
-- **概念与原理**（预训练 vs 从零、CNN 基础、感受野）→ `notes/python-foundation/sklearn-to-nn.md`
-- **工程手段**（argparse / 学习率调度 / 混合精度 / 断点续训）→ `notes/python-foundation/pytorch-engineering.md`
+- **概念与原理**（预训练 vs 从零、CNN 基础、感受野）→ `notes/deep-learning/sklearn-to-nn.md`
+- **工程手段**（argparse / 学习率调度 / 混合精度 / 断点续训）→ `notes/deep-learning/pytorch-engineering.md`
