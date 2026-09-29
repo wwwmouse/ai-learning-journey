@@ -498,6 +498,45 @@ nn.Conv2d(3, 16, kernel_size=3, padding=1)    # (batch, 3, 32, 32) → (batch, 1
 nn.Conv2d(32, 32, kernel_size=3, padding=1)   # (batch, 32, H, W) → (batch, 32, H, W)
 ```
 
+**附录：把上面的定义翻译成代码（15 行）**
+
+前面讲的都是 `nn.Conv2d` **在做什么**。想确认自己真的懂了，就用四重循环实现一遍，再和 PyTorch 对拍：
+
+```python
+import torch, torch.nn as nn
+
+def conv2d_naive(x, w, b=None, stride=1, padding=0):
+    """把「卷积」的定义直接翻译成四重循环。"""
+    N, C_in, H, W = x.shape                  # 原始尺寸先记下（padding 会改变 shape）
+    C_out, _, K, _ = w.shape
+    H_out = (H + 2 * padding - K) // stride + 1
+    W_out = (W + 2 * padding - K) // stride + 1
+    if padding:
+        x = torch.nn.functional.pad(x, [padding] * 4)
+    out = torch.zeros(N, C_out, H_out, W_out)
+    for n in range(N):                                    # ① 样本
+        for co in range(C_out):                           # ② 输出通道
+            for i in range(H_out):                        # ③ 输出行
+                for j in range(W_out):                    # ④ 输出列
+                    window = x[n, :, i*stride:i*stride+K, j*stride:j*stride+K]
+                    out[n, co, i, j] = (window * w[co]).sum()
+    if b is not None:
+        out += b.view(1, -1, 1, 1)
+    return out
+
+# 对拍：手写版 vs PyTorch
+x = torch.randn(2, 3, 8, 8)
+conv = nn.Conv2d(3, 4, 3, padding=1)
+print((conv2d_naive(x, conv.weight.data, conv.bias.data, padding=1) - conv(x)).abs().max())
+# 期望输出 ≈ 1e-6（不是 0 是正常的：浮点求和顺序不同）
+```
+
+> **重点看 `w[co]` 这一项**——它在 `(i, j)` 的**每一个位置上都取同一个张量**。
+> 这就是"权重共享"从一句结论变成代码的样子：参数只和窗口大小有关，**和图片多大完全无关**。
+>
+> 跑一遍还会发现它慢得离谱（比 `nn.Conv2d` 慢几百倍）。这正是整个软件栈存在的理由——
+> 真实现用的是 im2col + 矩阵乘法 + cuDNN 手写 kernel，而不是这四重循环。
+
 
 ##### 2.2.1.4 `nn.MaxPool2d(kernel_size)`：最大池化
 
@@ -641,6 +680,85 @@ output = gamma * x_norm + beta
 原因是两层 CNN 远没到过拟合——还在学基础，关神经元等于削弱。
 
 >**这已经被证明是一种有效的正则化技术**
+
+
+#### 2.2.3 感受野（Receptive Field）
+
+> **配套脚本**：`receptive_field.py`（同目录）。笔记讲"为什么"，脚本负责"**量给你看**"。
+
+**定义**：输出特征图上的**某一个像素**，是由输入图像上**多大一块区域**算出来的。那块区域的大小，就是这个输出的感受野。
+
+```
+输入 5×5                3×3 卷积后 3×3
+┌───────────┐            ┌─────┐
+│ a b c d e │            │     │
+│ f g h i j │   ───►     │  X  │  ← X 由输入的 3×3 区域算出
+│ k l m n o │            │     │     所以它的感受野 = 3×3
+│ p q r s t │            └─────┘
+│ u v w x y │
+└───────────┘
+```
+
+**递推公式**（记住这两行就够）：
+
+```
+RF   = RF + (kernel - 1) × jump
+jump = jump × stride
+初始：RF = 1, jump = 1
+```
+
+- `RF`：当前层的感受野大小
+- `jump`：当前层在**原图**上，相邻两个输出之间隔了多少像素
+
+**手算三档**（全是 3×3、stride=1）：1 个 → RF 3；2 个 → RF 5；3 个 → RF 7。
+
+#### 结论一：两个 3×3 = 一个 5×5，但参数更少
+
+| | 感受野 | 参数量（通道数 C） |
+|---|---|---|
+| 1 个 5×5 | 5×5 | 25C² |
+| 2 个 3×3 | 5×5 | **18C²**（少 28%） |
+
+感受野一样大，参数少 28%，而且中间多夹了一次 ReLU（非线性更强）。
+**这是 VGG 的结构论据，也是 ResNet 全部用 3×3 卷积的原因。**
+
+#### 结论二：降采样会加速感受野增长
+
+看公式里的 `jump`：每降采样一次 `jump` 翻倍，**之后每一层扩张的幅度也跟着翻倍**。
+
+```
+6 层 3×3 s1，全不降采样        → RF = 13
+6 层 3×3 s1，每层后跟 2×2 池化 → RF = 22   （约 1.7 倍）
+```
+
+代价是分辨率掉得更快。**所以降采样本质是"用分辨率换感受野"的交易。**
+
+#### 结论三：★ 感受野 ≠ 分辨率（最容易混的一条）
+
+拿 ResNet-18 在 32×32 输入上逐层算一遍，只换 stem：
+
+| 阶段 | 原版 stem | CIFAR 版 stem |
+|---|---|---|
+| stem 后 | RF 11，图 8×8 | RF 3，图 32×32 |
+| layer1 后 | RF 43，图 8×8 | RF 11，图 32×32 |
+| layer2 后 | RF 99，图 4×4 | RF 25，图 16×16 |
+| layer3 后 | RF 211，图 2×2 | RF 53，图 8×8 |
+| layer4 后 | **RF 435，图 1×1** | **RF 109，图 4×4** |
+
+> **反直觉的地方**：CIFAR 版感受野**反而更小**（109 vs 435），准确率却更高。
+>
+> 因为输入只有 32×32——**RF = 109 早就把整张图覆盖完了**，再大也没用。
+> 真正决定成败的是**分辨率**：原版到 layer4 只剩 1×1，全局平均池化退化成一个恒等操作，
+> 而 layer4 恰恰占了骨干约 75% 的参数。
+>
+> **「看得够不够大」和「还记得多细」是两件事——这里的问题是后者。**
+
+这也解释了一个常见困惑：为什么 ResNet-18 在 ImageNet（224×224）上不用改结构，
+搬到 CIFAR（32×32）就必须改 stem。
+
+**怎么亲眼验证**：`receptive_field.py` 用**梯度回传**实测——
+把一个输出像素的梯度设成 1、其余为 0，反向传播后看输入上哪些像素拿到了非零梯度。
+那是**量**出来的感受野，和上面的公式**互相对拍**（应为 3×3 / 5×5 / 7×7）。
 
 
 ### 2.3 损失函数
