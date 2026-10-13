@@ -1,14 +1,11 @@
-"""練習 2 自我驗證 — Path A（Ollama starter.py）。
-
-跑法：
-    python test.py
+"""
+練習 2 自我驗證 — Path A（Ollama starter.py）。
 
 驗證內容：
     - tool 清單完整、calculator 邏輯正確
     - LLM 三種題目分別選到 calculator / calendar / web_search
     - mock 用 OpenAI-compat shape（不需要 Anthropic SDK）
 
-Anthropic 版本 test 見 test_anthropic.py。
 """
 
 from __future__ import annotations
@@ -21,7 +18,7 @@ from unittest.mock import MagicMock
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from starter import TOOLS_SPEC, calculator, execute_tool, run_tool_selection
+from starter2 import TOOLS_SPEC, calculator, execute_tool, run_tool_selection
 
 
 # === Helpers for building mock OpenAI-compat responses ===

@@ -3,17 +3,6 @@
 横向铺开 3 个工具,讓本機 qwen2.5:3b 在 3 個 tool（web_search / calculator / calendar_lookup）裡選一個。
 重點不是工具強不強，是觀察 schema 的 description / 參數 / required 如何引導模型選對。
 
-跑法：
-    pip install -r requirements.txt
-    ollama pull qwen2.5:3b   # Stage 3+ tool-use 默認 model
-    ollama serve             # 預設 port 11434
-    python starter.py
-
-驗證：
-    python test.py   （用 mock、不打 API）
-
-想看 Anthropic Claude 版本：
-    python starter_anthropic.py   （需 ANTHROPIC_API_KEY；每次先保留 $0.05）
 """
 
 from __future__ import annotations
