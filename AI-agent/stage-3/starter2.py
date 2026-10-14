@@ -3,6 +3,32 @@
 横向铺开 3 个工具,讓本機 qwen2.5:3b 在 3 個 tool（web_search / calculator / calendar_lookup）裡選一個。
 重點不是工具強不強，是觀察 schema 的 description / 參數 / required 如何引導模型選對。
 
+【这个文件在做什么】
+    一次请求，让模型在三个工具里挑一个；程序按 allowlist 派发并执行，
+    最后把观察结果当作返回值交出去——到这里就结束，不回灌模型。
+    它要观察的是一个具体问题：schema 的三个部分各自如何影响模型的选择
+      · name         模型点单时引用它，必须和本地函数名一致
+      · description  模型靠它判断"何时该用、何时不该用"
+      · parameters   模型靠它决定怎么填（字段名、类型、required、enum）
+
+【和练习 1（hello_tool.py）的关系】不是升级，是两个方向
+    hello_tool.py   1 个工具，固定 2 次调用，observation 会回灌模型  → 走"深"
+    starter2.py     3 个工具，只调 1 次，observation 直接返回        → 走"广"
+    真正的"多工具 + 完整循环"要等练习 3（starter3.py）才出现。
+
+【三个设计要点】
+    1. 三张表分工：TOOLS_SPEC（给模型看的菜单）/ TOOL_IMPL（allowlist）/ TOOL_FIELDS（字段名）
+       派发只能查表，绝不能用 globals()[name]() 或 eval()。
+    2. 错误变字符串：工具执行与参数验证的所有失败都返回 "error: ..."，
+       整个流程不往外抛异常——这是练习 5「把可修正的错误送回模型」的地基。
+    3. client 可注入：run_tool_selection(question, client=None) 里那个参数，
+       唯一目的是让 test2_multi_tool_selection.py 能塞 MagicMock 进来，不调真模型。
+       
+【跑法】
+    ollama serve
+    python starter2.py                        # 真机自检
+    python test2_multi_tool_selection.py      # 契约测试，不调模型、毫秒级
+
 """
 
 from __future__ import annotations
@@ -134,7 +160,7 @@ def calendar_lookup(date: str) -> str:
 #   type: "object"              —— 参数整体是一个对象
 #   required: [field]           —— 哪个字段必填
 #   additionalProperties: False —— 不许填菜单外的字段
-# 但 schema 只是"给模型看的约束"，各家供应商遵守程度不同，
+#   但 schema 只是"给模型看的约束"，各家供应商遵守程度不同，
 #   所以程序侧必须再验证一遍——就是下面 execute_tool 做的事。
 def _wrap(name: str, description: str, field: str, field_description: str) -> dict:
     return {
@@ -185,24 +211,24 @@ TOOL_FIELDS = {
 #   ⑥ 才真正调用函数；执行中报错也转成字符串
 # 设计要点：这个函数不往外抛异常，所有失败都以 "error: ..." 字符串返回。
 # 返回 (args, observation)：args 是解析后的参数，observation 是要回给模型的结果。
-# 小瑕疵：前 5 关失败时返回 {}，第 6 关失败时返回已解析的 args，返回值不太一致。
+
 def execute_tool(name: str, raw_arguments: str) -> tuple[dict, str]:
     """Parse and validate model output before dispatching an allowlisted tool."""
     if name not in TOOL_IMPL:
         return {}, f"error: tool not allowed: {name}"
     try:
-        args = json.loads(raw_arguments)
+        args = json.loads(raw_arguments)                            # 字符串转dict
     except (TypeError, json.JSONDecodeError):
         return {}, "error: arguments must be valid JSON"
     if not isinstance(args, dict):
         return {}, "error: arguments must be a JSON object"
-    field = TOOL_FIELDS[name]
-    if set(args) != {field}:
-        return {}, f"error: arguments must contain exactly {field}"
-    if not isinstance(args[field], str) or not args[field].strip():
+    field = TOOL_FIELDS[name]                                       # 期望的字段名
+    if set(args) != {field}:                                        # 检验args里的key是否正好期望的字段名
+        return {}, f"error: arguments must contain exactly {field}" 
+    if not isinstance(args[field], str) or not args[field].strip(): # 检验args[field]是str类型 且删除首尾留白
         return {}, f"error: {field} must be a non-empty string"
     try:
-        return args, TOOL_IMPL[name](args)
+        return args, TOOL_IMPL[name](args) # 返回一个元组(args,函数传参args的结果)
     except (KeyError, TypeError, ValueError) as exc:
         return args, f"error: invalid arguments: {exc}"
 
@@ -217,22 +243,23 @@ def execute_tool(name: str, raw_arguments: str) -> tuple[dict, str]:
 #   ③ 正好一个单 → 交给 execute_tool 验证并执行
 # 最关键的一点：observation 在这里直接返回给调用者，并没有喂回模型。
 #   所以这一轮少了 "tool result → model" 那半步，还不是完整的 Agent Loop。
-# client 参数是为了可测试：test.py 会传 MagicMock 进来，这样不用真的调用模型。
-# 已知盲点：没有检查 finish_reason。如果模型是因为被截断（length）才没点单，
-#   这里会返回 tool=None，和"模型主动决定不用工具"长得一模一样。
 def run_tool_selection(question: str, client: Any = None) -> dict:
     """單輪 call：LLM 看完 question + tools 後選一個 tool 呼叫，本地執行 observation 接回去。"""
     client = client or OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
     resp = client.chat.completions.create(
         model=MODEL,
-        tools=TOOLS_SPEC,
+        tools=TOOLS_SPEC, # 模型根据 TOOLS_SPEC 内部加载的 dict 判断使用哪个函数
         messages=[{"role": "user", "content": question}],
     )
     msg = resp.choices[0].message
     text = msg.content or ""
     tool_calls = msg.tool_calls or []
+    
+    # 未调用工具
     if not tool_calls:
         return {"tool": None, "assistant_text": text, "observation": None}
+    
+    # 不止调用一个工具    
     if len(tool_calls) != 1:
         return {
             "tool": None,
@@ -241,6 +268,8 @@ def run_tool_selection(question: str, client: Any = None) -> dict:
         }
     call = tool_calls[0]
     args, observation = execute_tool(call.function.name, call.function.arguments)
+    # 检验函数名 name 与参数 key-value arguments，通过后直接调用返回结果
+    # 此时args即为 call.function.arguments 中解析后的参数，observation为函数返回结果
     return {
         "tool": call.function.name,
         "tool_input": args,

@@ -1,10 +1,36 @@
-"""
-練習 2 自我驗證 — Path A（Ollama starter.py）。
+"""练习 2 的验收单 —— starter2.py 的契约测试（全程 mock，不调用模型）。
 
-驗證內容：
-    - tool 清單完整、calculator 邏輯正確
-    - LLM 三種題目分別選到 calculator / calendar / web_search
-    - mock 用 OpenAI-compat shape（不需要 Anthropic SDK）
+【这个文件在做什么】
+    它不演示功能，它"验收"功能：把「starter2 应该怎样表现」写成断言。
+    改完 starter2 后跑它，立刻知道有没有把原来的行为改坏——这就是回归测试。
+    它便宜又可靠，靠的是三件事：
+      · 不联网、不调模型   → 毫秒级、$0
+      · 响应是自己造的     → 结果确定，不受模型随机性影响
+      · 靠 __main__ 守卫导入 starter2 → 导入时不会触发真机自检
+
+【8 个测试各自钉住什么】
+    1 test_tool_spec_contains_three_tools        工具名与顺序、calculator 基本正确
+    2 test_calculator_rejects_unsafe_expressions 8 种危险表达式全部拒绝
+    3 test_llm_selects_calculator                选中计算器 → observation 为 "4.0"
+    4 test_llm_selects_calendar                  选中日程 → 结果含 Stage 3 review
+    5 test_llm_uses_search_instead_of_calendar_for_news  外部信息类走 web_search
+    6 test_no_tool_call_returns_none             不点单 → tool=None、observation=None
+    7 test_untrusted_arguments_are_rejected      6 种非法参数（坏 JSON / 缺字段 / 未知工具 /
+                                                 多字段 / 类型错 / 空白值）全部拦下
+    8 test_multiple_calls_are_not_silently_partially_executed  多单一律整批拒绝
+
+【它能证明什么、不能证明什么】（重要）
+    能证明：纯逻辑——计算器安全性、参数验证、各分支处理。完全不依赖模型。
+    能证明：管道正确性——"假设模型选了 X，我的程序处理得对吗"。
+    不能证明：模型会不会真的选对。因为工具名是 mock 指定的；
+              模型的选择能力只能靠真机重跑多次来评估（练习 6 的结果卡）。
+    一个推论：测试的覆盖面 = 你的程序实际承担的责任。这里只有 8 条，
+              正说明 starter2 承担的责任很小（它只是个单轮选择器）。
+
+【跑法】必须在 stage-3 目录下运行（底部 import 的是同目录的 starter2）
+    python test2_multi_tool_selection.py              # 直接跑，零依赖
+    注意：第 2、7、8 条没有 print，所以终端只有 5 行 ✅。
+          没有输出不等于没跑——没有抛异常就是通过。
 
 """
 
