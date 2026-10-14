@@ -178,10 +178,8 @@ print(f"结果role：{final_assistant.role}")
 print(f"结果点单信息：{final_assistant.tool_calls}")
 print("=================================")
 print(f"最终完整messages:")
-i=1
-for m in messages:
-    print(f"第{i}次message：{messages[i-1]}")
-    i=i+1
+for i in range(0,len(messages)):
+    print(f"第{i+1}次message：{messages[i]}")
 
 assert assistant.tool_calls[0].function.name == "get_weather"
 assert any(message["role"] == "tool" for message in messages)
