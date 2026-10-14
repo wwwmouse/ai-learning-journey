@@ -51,7 +51,6 @@
 # ├── role: "tool"      → 带 {role, tool_call_id, content}   工具结果（必须有订单号）
 # │                       content 必须是字符串（dict 要先 json.dumps）；另有可选 name
 # └── role: "system"    → 带 {role, content}          系统设定（以后会见到，通常放最前）
-
 # content：user / system / tool 消息必有（说话的内容 / 工具结果文本）；assistant 可能有也可能没有
 # tool_calls：只有 assistant 消息可能有——因为只有模型会点单
 # tool_call_id：只有 tool 消息必须有——因为只有工具结果需要认领订单
@@ -101,6 +100,10 @@ def get_weather(city: str, unit: str) -> dict:
 
 
 messages = [{"role": "user", "content": "台北现在几度？"}]
+# messages是一个在harness层面维护的对象，用于存储每次的对话，并把新对话直接append进尾部
+# 模型自身是没有记忆的，它完全依赖于messages保存的每一次对话/请求记录 
+# 因此聊得越久每次请求的 messages 内容就越多
+
 first = client.chat.completions.create(
     model="qwen2.5:3b", messages=messages, tools=TOOLS
 )
@@ -108,19 +111,29 @@ first = client.chat.completions.create(
 # 第一次调用，模型内部没有工具查询实时信息，无法回答
 
 assistant = first.choices[0].message
+
+print(f"回执: {assistant.model_dump(exclude_none=True)}")
+print(f"回执role: {assistant.role}")
+print(f"回执content(点单时一般为None/空): {assistant.content}")
+print(f"回执点单信息: {assistant.tool_calls[0]}")
+print(f"回执点单函数名: {assistant.tool_calls[0].function.name}")
+print(f"回执点单函数内参数: {assistant.tool_calls[0].function.arguments}")
+
+
 messages.append(assistant.model_dump(exclude_none=True)) 
-# model_dump 把对象转为普通dict , exclude_none 丢弃值为 None 的字段
+# model_dump 把 message 对象转为普通dict , exclude_none 丢弃值为 None 的字段
+
 # 模型会试图使用TOOLS里面的提前写好的get_weather函数，于是返回：
 # {'content': '', 
 #  'role': 'assistant', 
 #  'tool_calls': 
-#      [{'id': 'call_63ypy0ya',
+#      [{'id': 'call_xxxxxxxx',
 #         'function':
 #             {'arguments': '{"unit":"celsius","city":"台北"}',
 #              'name': 'get_weather'}, 
 #         'type': 'function',
 #         'index': 0}]}
-# 这一步把模型的“点单”消息回填进 messages 历史
+# 把模型的“点单”消息回填进 messages 历史
 
 for call in assistant.tool_calls or []: # 防御性写法：防止模型不点单导致的tool_calls = None ，for x in None会直接崩溃
                                         # or 会在tool_calls = None时返回后一个值[]，而 for x in []是合法的^^
@@ -128,15 +141,15 @@ for call in assistant.tool_calls or []: # 防御性写法：防止模型不点�
         raise ValueError(f"不允许的工具：{call.function.name}")
     args = json.loads(call.function.arguments) # 先把参数的 JSON 字符串解析成 dict
     if (
-        not isinstance(args, dict) # 判断args是dict类型的实例
-        or set(args) != {"city", "unit"} # 参数名必须是city unit
-        or not isinstance(args["city"], str) # city的value必须是字符串
-        or not args["city"].strip() # 且不能是空白
+        not isinstance(args, dict)              # 判断args是dict类型的实例
+        or set(args) != {"city", "unit"}        # 参数名必须是city unit
+        or not isinstance(args["city"], str)    # city的value必须是字符串
+        or not args["city"].strip()             # 且不能是空白
         or args["unit"] != "celsius"
     ):
         raise ValueError("city 必须是非空字符串，unit 必须是 celsius")
     result = get_weather(args["city"], args["unit"])
-    # 真正调用函数返回26这个设定好的虚假值
+    # 真正调用函数：返回26这个设定好的虚假值
     
     messages.append({
         "role": "tool",
@@ -157,7 +170,18 @@ final = client.chat.completions.create(
 )
 # 第二次调用，messages内部存储了新增的函数返回值
 
-print(final.choices[0].message.content)
+final_assistant = final.choices[0].message
+messages.append(final_assistant.model_dump(exclude_none=True))
+
+print(f"结果content：{final.choices[0].message.content}")
+print(f"结果role：{final_assistant.role}")
+print(f"结果点单信息：{final_assistant.tool_calls}")
+print("=================================")
+print(f"最终完整messages:")
+i=1
+for m in messages:
+    print(f"第{i}次message：{messages[i-1]}")
+    i=i+1
 
 assert assistant.tool_calls[0].function.name == "get_weather"
 assert any(message["role"] == "tool" for message in messages)
