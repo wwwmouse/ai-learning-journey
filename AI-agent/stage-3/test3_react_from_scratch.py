@@ -1,12 +1,43 @@
 """
-練習 3 自我驗證 — Path A（Ollama starter.py）。
+练习 3 的验收单 —— starter3.py 的契约测试（全程 mock，不调用模型）。
 
-驗證內容：
-    - react_loop 收到 tool_calls → 執行 tool → observation 接回 → 拿到 finish_reason='stop'
-    - react_loop 在 max_iter 內停（避免無限迴圈）
-    - tool_calculator / tool_lookup_fact 邏輯正確
-    - 跨 backend：mock 用 OpenAI-compat shape（不需要 Anthropic SDK）
+【这个文件在做什么】
+    它验收 react_loop 的两个关键性质，而这两个正是课程给练习 3 的完成条件：
+      A. 没有 tool call → 循环立刻停止并交出答案
+      C. 一直点单不停   → 跑满 max_iter 就停，标记 truncated=True，绝不无限绕圈
+    另外还验证：工具层正确性、参数验证、以及"截断的结果不能当答案"。
+    和 test2 一样：不联网、$0、毫秒级、结果确定。
 
+【和 test2 的关键差别：return_value → side_effect】
+    test2（单轮）  client.chat.completions.create.return_value = resp
+                  每次调用都返回同一个假响应。
+    test3（多轮）  client.chat.completions.create.side_effect = [resp1, resp2, resp3, ...]
+                  第 1 次调用返回 resp1、第 2 次返回 resp2……
+                  这是精确模拟"多轮对话里每轮模型输出"的核心技巧。
+                  也可以传一个函数（如 never_ending），模拟"永远不收尾"来测上限。
+
+【8 个测试各自钉住什么】
+    1 test_calculator_basic                         工具正确性
+    2 test_calculator_rejects_unsafe_expressions    8 种危险表达式全部拒绝
+    3 test_lookup_fact                              工具正确性
+    4 test_react_loop_single_tool_call              停止条件 A：1 轮工具 + 1 轮 stop = 2 轮
+    5 test_react_loop_multi_step                    ⭐核心：查台北 → 查纽约 → 算比例 → stop
+                                                    （4 轮），证明模型会用上一步的结果点下一步的单
+    6 test_react_loop_respects_max_iter              停止条件 C：永不收尾 → 3 轮后 truncated
+    7 test_invalid_tool_call_is_returned_as_data    execute_tool 的三元组返回值
+    8 test_non_stop_terminal_reason_is_not_a_final_answer
+                                                    finish_reason="length" 不能当成答案
+
+【它能证明什么、不能证明什么】
+    能证明：三种退出方式、多步链式调用、工具层逻辑、参数验证。全部确定。
+    不能证明：真模型会不会真的走多步。mock 里每一轮响应都是你写死的；
+              真实成功率只能靠真机重跑多次来评估（练习 6 的结果卡）。
+    一个推论：这份测试照顾的是"循环逻辑对不对"，不是"模型聪不聪明"。
+
+【跑法】必须在 stage-3 目录下运行（底部 import 的是同目录的 starter3）
+    python test3_react_from_scratch.py              # 直接跑，零依赖
+    python -m pytest test3_react_from_scratch.py    # 也行，但不是必须
+    注意：第 2、7、8 条没有 print，所以终端只有 5 行 ✅ —— 没有输出不等于没跑。
 """
 
 from __future__ import annotations

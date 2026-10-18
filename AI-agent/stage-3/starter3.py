@@ -1,8 +1,42 @@
 """
-練習 3：從零實作 ReAct（不用 framework）— starter.py（Path A、Ollama 默認）
+練習 3：從零實作 ReAct（不用 framework）— starter3.py（Path A、Ollama 默認）
 
 用一小段 Python 把「assistant 文字 → Tool Call → Tool Result」迴圈寫出來。
 不要 LangChain、不要 LangGraph，就是純 while loop。
+
+【这个文件在做什么】
+    让模型自己决定要不要再查一次，直到它不再点单为止。
+    循环骨架只有四步（见下方 react_loop）：
+      ① 问模型（带上当前累积的 messages + tools）
+      ② 把这一轮 assistant 消息回填进 messages
+         （含 tool_calls；不填，下一轮的 tool 消息就没有订单可认领）
+      ③ 没有 tool_calls → 收工；但要先确认 finish_reason == "stop" 才算真答案
+      ④ 有 tool_calls   → 逐个执行、结果包成 role="tool" 消息回灌、继续下一轮
+    跑满 max_iter 还停不下来 → 标记 truncated=True，绝不无限绕圈。
+
+【和练习 1 / 练习 2 的关系】
+    hello_tool.py   1 工具 / 固定 2 次调用 / 结果回灌 / 无循环   → 走"深"
+    starter2.py     3 工具 / 只用 1 次    / 结果不回灌 / 无循环   → 走"广"
+    starter3.py     2 工具 / 1~max_iter 次 / 结果回灌 / 有界循环 → 第一次满足
+                   Stage 3 的定义：模型 + 工具 + 有界循环
+    练习 1 的"回填 + 配对"、练习 2 的"三张表 + 验证"在这里原样复用；
+    真正新增的只有循环控制、停止条件与 trace。
+
+【三种退出方式】（课程的完成条件就要求测试能分别证明 A 和 C）
+    A 正常收尾  没有 tool_calls 且 finish_reason == "stop"    → final = 答案
+    B 异常终止  没有 tool_calls 但 finish_reason 是 length 等 → final = None + terminal_reason
+    C 撞上限    跑满 max_iter 还在点单                         → final = None + truncated=True
+
+【三个新概念】
+    trace      每轮的 step / assistant_text / tool / tool_input / obs 列表。
+               记"可验证摘要"即可，不要求模型公开私有思维链。
+    truncated  是否撞上限或被截断——提醒调用方"这是半成品，别当答案"
+    terminal_reason  非正常结束的原因（length / missing_tool_call 等）
+
+【跑法】（$0，走本机 Ollama）
+    ollama serve
+    python starter3.py                      # 真机自检（多步推理题）
+    python test3_react_from_scratch.py      # 契约测试，不调模型、毫秒级
 
 """
 
