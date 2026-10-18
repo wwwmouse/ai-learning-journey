@@ -366,5 +366,5 @@ if __name__ == "__main__":
 
     # 寬鬆驗證（小 model 不一定精確到 4 位小數）
     assert result.get("final") is not None or result.get("truncated"), "loop 應收尾或顯式 truncate"
-    assert result["steps"] <= 5, "loop 不可超過 max_iter"
+    assert result["steps"] <= my_step, "loop 不可超過 max_iter"
     print("✅ 練習 3 通過 — 你已用本機 qwen2.5:3b 跑通 ReAct + tool use、$0/run")
