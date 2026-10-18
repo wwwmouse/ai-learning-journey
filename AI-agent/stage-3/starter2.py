@@ -219,7 +219,7 @@ def execute_tool(name: str, raw_arguments: str) -> tuple[dict, str]:
     if name not in TOOL_IMPL:
         return {}, f"error: tool not allowed: {name}"
     try:
-        args = json.loads(raw_arguments)                            # 字符串转dict
+        args = json.loads(raw_arguments)                            # json object → Python dict
     except (TypeError, json.JSONDecodeError):
         return {}, "error: arguments must be valid JSON"
     if not isinstance(args, dict):
@@ -227,7 +227,7 @@ def execute_tool(name: str, raw_arguments: str) -> tuple[dict, str]:
     field = TOOL_FIELDS[name]                                       # 期望的字段名
     if set(args) != {field}:                                        # 检验args里的key是否正好期望的字段名
         return {}, f"error: arguments must contain exactly {field}" 
-    if not isinstance(args[field], str) or not args[field].strip(): # 检验args[field]是str类型 且删除首尾留白
+    if not isinstance(args[field], str) or not args[field].strip(): # 检验args[field]是str类型且非空
         return {}, f"error: {field} must be a non-empty string"
     try:
         return args, TOOL_IMPL[name](args) # 返回一个元组(args,函数传参args的结果)
