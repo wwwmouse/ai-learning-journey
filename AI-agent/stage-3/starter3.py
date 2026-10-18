@@ -207,7 +207,7 @@ TOOL_IMPL = {
     "lookup_fact": lambda inp: tool_lookup_fact(inp["query"]),
 }
 
-# 【🟢 必读】表③：名字 → 该有的那一个字段名，供 execute_tool 做参数验证
+# 【🟢 必读】表③：函数名字 → 参数该有的字段名，供 execute_tool 做参数验证
 # 注意它和 TOOLS_SPEC 里的字段名是"手动同步"的：改了一处忘了另一处，
 # 就会出现"模型被要求填 A、验证器期望 B"的错位。
 TOOL_FIELDS = {
@@ -224,22 +224,22 @@ TOOL_FIELDS = {
 # ⚠️ 但目前 react_loop 用 "_" 把它丢掉了 —— is_error 已生产、尚未使用。
 def execute_tool(name: str, raw_arguments: str) -> tuple[dict, str, bool]:
     """Validate an untrusted tool call before dispatch."""
-    if name not in TOOL_IMPL:
+    if name not in TOOL_IMPL:                                   # 名字不在白名单内
         return {}, f"error: tool not allowed: {name}", True
-    try:
-        args = json.loads(raw_arguments)
-    except (TypeError, json.JSONDecodeError):
+    try:                                                        # json object → Python dict
+        args = json.loads(raw_arguments)                        
+    except (TypeError, json.JSONDecodeError):                   # 兜底类型错误与json解析错误
         return {}, "error: arguments must be valid JSON", True
-    if not isinstance(args, dict):
+    if not isinstance(args, dict):                              # 确定args是dict类型
         return {}, "error: arguments must be a JSON object", True
-    field = TOOL_FIELDS[name]
-    if set(args) != {field}:
+    field = TOOL_FIELDS[name]                                   # 该函数对应的参数名
+    if set(args) != {field}:                                    # 确定函数对应的参数名与自带的参数名一致
         return {}, f"error: arguments must contain exactly {field}", True
-    if not isinstance(args[field], str) or not args[field].strip():
+    if not isinstance(args[field], str) or not args[field].strip():    # 确定args内值是str形式且非空
         return {}, f"error: {field} must be a non-empty string", True
     try:
-        observation = TOOL_IMPL[name](args)
-    except (KeyError, TypeError, ValueError) as exc:
+        observation = TOOL_IMPL[name](args)                     # 执行函数，返回结果
+    except (KeyError, TypeError, ValueError) as exc:            # 兜底键值错误/类型错误
         return args, f"error: invalid arguments: {exc}", True
     return args, observation, observation.startswith("error:")
 
@@ -274,6 +274,13 @@ def react_loop(question: str, max_iter: int = 6, client: Any = None) -> dict:
     """
     client = client or OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
     messages = [{"role": "user", "content": question}]
+    
+    # 运行轨迹：记录事后能检查的东西
+    # 作用：
+    #     调试：模型为什么选了 lookup_fact 而不是 calculator？看 trace
+    #     评估（eval）：统计失败模式、算成功率（练习 6 的结果卡就靠这种数据）
+    #     可观测性：生产系统里就是日志/审计（Stage 7 的正式课题）
+    #     展示：starter3.py 的 __main__ 就是靠遍历 trace 打印每一步
     trace: list[dict] = []
 
     for step in range(max_iter):
@@ -286,7 +293,8 @@ def react_loop(question: str, max_iter: int = 6, client: Any = None) -> dict:
         assistant_text = msg.content or ""
         tool_calls = msg.tool_calls or []
 
-        # 把 assistant message 加進 messages（OpenAI 格式）
+        # assistant_entry用于翻译格式
+        # 使用目前信息构造一条完整的message，也可以直接用msg.model_dump()把pydantic对象自动转成需要的dict格式
         assistant_entry: dict = {"role": "assistant", "content": assistant_text}
         if tool_calls:
             assistant_entry["tool_calls"] = [
@@ -300,11 +308,12 @@ def react_loop(question: str, max_iter: int = 6, client: Any = None) -> dict:
         messages.append(assistant_entry)
 
         finish_reason = resp.choices[0].finish_reason
-        if not tool_calls:
+        if not tool_calls: # 模型这轮没有点单 
+            # 记录一条没有工具的轨迹
             trace.append({"step": step, "assistant_text": assistant_text, "tool": None, "obs": None})
-            if finish_reason == "stop":
+            if finish_reason == "stop": # 正常结束
                 return {"final": assistant_text, "trace": trace, "steps": step + 1}
-            return {
+            return { # 非正常结束
                 "final": None,
                 "trace": trace,
                 "steps": step + 1,
@@ -324,11 +333,11 @@ def react_loop(question: str, max_iter: int = 6, client: Any = None) -> dict:
             })
 
             trace.append({
-                "step": step,
-                "assistant_text": assistant_text,
-                "tool": tc.function.name,
-                "tool_input": args,
-                "obs": last_obs,
+                "step": step,                       # 第几轮
+                "assistant_text": assistant_text,   # 说了什么
+                "tool": tc.function.name,           # 点单的工具
+                "tool_input": args,                 # 参数输入
+                "obs": last_obs,                    # 拿到的结果
             })
 
     return {"final": None, "trace": trace, "steps": max_iter, "truncated": True}
@@ -344,7 +353,8 @@ if __name__ == "__main__":
     print(f"❓ 問題：{question}（using Ollama {MODEL}）")
     print("-" * 60)
 
-    result = react_loop(question, max_iter=5)
+    my_step=int(input("请输入Agent Loop最大轮数:"))
+    result = react_loop(question, max_iter=my_step)
 
     for entry in result["trace"]:
         print(f"[step {entry['step']}] assistant: {(entry['assistant_text'] or '')[:80]}...")
