@@ -58,6 +58,14 @@ MODEL = os.environ.get("MODEL", "qwen2.5:3b")
 
 
 # === 1. Tools 定義（含實作）===
+#
+# 【阅读图例】本文件按"对 agent 学习的重要度"标注，优先级从高到低：
+#   ⭐ 核心   —— 必须逐行吃透（只有 react_loop 一个）
+#   🟢 必读   —— agent 机制所在（schema / allowlist / 参数验证）
+#   🟡 看关键 —— 只看外层几行就能拿到要点（工具错误怎么处理）
+#   ⚪ 可跳过 —— 业务或胶水代码，当黑盒即可（安全计算器、假数据、自检）
+#
+# 提醒：全文件约 300 行，其中一半以上属于 ⚪。跳过它们不是偷懒，是分层阅读。
 
 MAX_EXPRESSION_LENGTH = 200
 MAX_AST_NODES = 50
@@ -65,12 +73,22 @@ MAX_AST_DEPTH = 12
 MAX_ABS_NUMBER = 1_000_000_000_000
 
 
+# 【⚪ 可跳过】计算器的数值边界检查
+# 作用：整数看绝对值；浮点数额外要求"有限"（挡掉 inf / nan）。
+# 它只是 calculator 的辅助函数——与 agent 机制无关，换业务就没有这段代码。
 def _within_bounds(value: int | float) -> bool:
     if isinstance(value, int):
         return abs(value) <= MAX_ABS_NUMBER
     return math.isfinite(value) and abs(value) <= MAX_ABS_NUMBER
 
 
+# 【⚪ 可跳过 —— 整段黑盒】安全计算器的核心：AST 白名单
+# 它做的事：把表达式解析成语法树，只放行数字常量、一元正负号、+ - * / 和括号，
+#           其它节点（**、//、函数调用、属性访问）一律 raise；另有四道上限防 DoS。
+# 为什么可以跳过：
+#   · 这是"安全算术"的实践，不是 agent 的机制（换业务就是另一套代码）
+#   · 你只需要记住对外契约：输入表达式字符串 → 返回数值，失败 raise ValueError
+# 想追问"为什么不能用 eval()"可以看，但别为读懂它耽误练习 3 的核心。
 def _evaluate_arithmetic(expression: str) -> int | float:
     """只計算小型數學式；模型文字永遠不會變成程式碼。"""
     if len(expression) > MAX_EXPRESSION_LENGTH:
@@ -117,6 +135,11 @@ def _evaluate_arithmetic(expression: str) -> int | float:
     return visit(tree)
 
 
+# 【🟡 只看外层 5 行】对外的计算器工具
+# ⭐ 值得看的正是这几行：工具内部的异常被"翻译"成 "error: ..." 字符串返回，
+#    而不是抛出去炸掉循环——这是 agent 知识：工具失败要以"数据"形式回到模型手里。
+# ⚪ 不值得看的是它调用的 _evaluate_arithmetic（上面那个黑盒）。
+# 契约：str 进 → str 出；成功是数值文本，失败是以 "error:" 开头的文本。
 def tool_calculator(expression: str) -> str:
     """安全的計算器：只允許 + - * / 跟數字。"""
     try:
@@ -125,6 +148,9 @@ def tool_calculator(expression: str) -> str:
         return f"error: {exc}"
 
 
+# 【⚪ 可跳过】假的事实查询工具（教学用，不联网）
+# 实现就是查一个写死的字典，查不到返回 "unknown: ..."。
+# 唯一值得注意的一点：它同样遵守约定——工具永远返回字符串，失败也给可读的文本。
 def tool_lookup_fact(query: str) -> str:
     """假的事實查詢（教學專用、避免依賴外部 API）。"""
     facts = {
@@ -136,6 +162,9 @@ def tool_lookup_fact(query: str) -> str:
 
 
 # OpenAI-compatible 的 tools schema wrap 在 {"type":"function", "function":{...}} 裡
+# 【🟢 必读】表①：给模型看的"工具说明书"（schema）
+# 每条三要素：name（模型点单时引用）/ description（何时该用）/ parameters（怎么填）
+# 这份 schema 直接决定模型选得准不准——练习 2 的观察对象、练习 6 的改造对象。
 TOOLS_SPEC = [
     {
         "type": "function",
@@ -169,17 +198,30 @@ TOOLS_SPEC = [
     },
 ]
 
+# 【🟢 必读】表②：allowlist —— 名字 → 真正要执行的函数
+# 派发只能查这张表；绝不能用 globals()[name]() 或 eval()，
+# 否则等于把"执行哪段代码"的决定权交给模型。
+# 这里的 lambda 是适配层：把通用的 args 字典翻译成具体函数需要的参数。
 TOOL_IMPL = {
     "calculator": lambda inp: tool_calculator(inp["expression"]),
     "lookup_fact": lambda inp: tool_lookup_fact(inp["query"]),
 }
 
+# 【🟢 必读】表③：名字 → 该有的那一个字段名，供 execute_tool 做参数验证
+# 注意它和 TOOLS_SPEC 里的字段名是"手动同步"的：改了一处忘了另一处，
+# 就会出现"模型被要求填 A、验证器期望 B"的错位。
 TOOL_FIELDS = {
     "calculator": "expression",
     "lookup_fact": "query",
 }
 
 
+# 【🟢 必读】派发前的六道验证关卡 —— agent 的核心安全边界之一
+#   ① 名字在 allowlist 里吗   ② arguments 是合法 JSON 吗   ③ 解析出来是 dict 吗
+#   ④ 键正好是那一个吗        ⑤ 是非空字符串吗             ⑥ 才真正调用工具
+# ⭐ 和练习 2 的版本相比，这里多了第三个返回值 is_error：
+#    (args, observation, is_error) 三元组是练习 5「错误分流」的接口准备。
+# ⚠️ 但目前 react_loop 用 "_" 把它丢掉了 —— is_error 已生产、尚未使用。
 def execute_tool(name: str, raw_arguments: str) -> tuple[dict, str, bool]:
     """Validate an untrusted tool call before dispatch."""
     if name not in TOOL_IMPL:
@@ -204,6 +246,24 @@ def execute_tool(name: str, raw_arguments: str) -> tuple[dict, str, bool]:
 
 # === 2. ReAct loop ===
 
+# 【⭐ 核心 —— 全文件唯一必须逐行吃透的函数】
+# 这是"模型 + 工具 + 有界循环"的完整实现，也就是 Stage 3 的全部意义。
+#
+# 每轮四步：
+#   ① 问模型（messages 已累积 + tools）
+#   ② 回填这一轮的 assistant 消息（含 tool_calls；不填则下一轮 tool 消息无订单可认领）
+#   ③ 没有 tool_calls → 收工；但只有 finish_reason == "stop" 才算真答案
+#   ④ 有 tool_calls   → 逐个执行，结果包成 role="tool" 消息回灌，继续下一轮
+#
+# 三种退出（课程完成条件要求测试能证明 A 和 C）：
+#   A 正常收尾 final = 答案
+#   B 异常终止 finish_reason 非 stop（如 length）→ final = None + terminal_reason
+#   C 撞上限   跑满 max_iter → final = None + truncated = True
+#
+# 读的时候盯住三处：
+#   · messages 建在循环外 —— 它就是"记忆"本身
+#   · 回填 assistant 在"判断停止之前" —— 保证给出答案的那一轮也进了历史
+#   · 所有中止都是 return 数据，不抛异常 —— 由调用方决定怎么处理
 def react_loop(question: str, max_iter: int = 6, client: Any = None) -> dict:
     """
     OpenAI-compatible ReAct loop。每輪：
@@ -276,8 +336,11 @@ def react_loop(question: str, max_iter: int = 6, client: Any = None) -> dict:
 
 # === 3. 自我驗證 ===
 
+# 【⚪ 可跳过】真机自检：只有直接运行本文件时才执行
+# 它跑一道多步推理题并把 trace 逐行打印——用来"看看循环长什么样"，不是核心逻辑。
+# 被 test3 导入时不会触发（靠的就是这个 __main__ 守卫）。
 if __name__ == "__main__":
-    question = "'台北人口' 除以 '紐約人口'、答案保留 4 位小數。"
+    question = "'台北人口' 除以 '紐約人口'、答案保留 4 位小數。" # 可改成光速是多少进行测试
     print(f"❓ 問題：{question}（using Ollama {MODEL}）")
     print("-" * 60)
 
