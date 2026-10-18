@@ -112,12 +112,17 @@ first = client.chat.completions.create(
 
 assistant = first.choices[0].message
 
+# 诊断打印要放进守卫：模型不点单时，直接访问 tool_calls[0] 会先抛 TypeError，
+# 抢掉后面那句清晰的 RuntimeError 兜底。
 print(f"回执: {assistant.model_dump(exclude_none=True)}")
 print(f"回执role: {assistant.role}")
 print(f"回执content(点单时一般为None/空): {assistant.content}")
-print(f"回执点单信息: {assistant.tool_calls[0]}")
-print(f"回执点单函数名: {assistant.tool_calls[0].function.name}")
-print(f"回执点单函数内参数: {assistant.tool_calls[0].function.arguments}")
+if assistant.tool_calls:
+    print(f"回执点单信息: {assistant.tool_calls[0]}")
+    print(f"回执点单函数名: {assistant.tool_calls[0].function.name}")
+    print(f"回执点单函数内参数: {assistant.tool_calls[0].function.arguments}")
+else:
+    print("模型没有点单——后面的 get_weather 分支不会执行")
 
 
 messages.append(assistant.model_dump(exclude_none=True)) 
