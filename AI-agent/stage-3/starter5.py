@@ -19,11 +19,6 @@
     回 {"error":"network timeout", "retry_hint":"try again in 1s"}，
     模型才能判断"这是暂时的、值得重试一次"。**retry_hint 就是给模型的决策依据。**
 
-【三种失败情境】由 _failure_plan 控制
-    set_weather_failures([True, False])  第一次失败、第二次成功 → 观察 retry
-    set_weather_failures([True, True])   连续失败 → 观察 graceful end
-    set_weather_failures([])             直接成功
-
 【和前后练习的关系】
     starter3.py  错误是字符串 + is_error 被丢弃 → 只练「循环 + 回灌」
     starter5.py  错误是结构化 dict（带 retry_hint）→ 练「模型基于错误做决策」
