@@ -19,6 +19,15 @@
     8 test_malformed_arguments_return_structured_error  坏 JSON / 空 city → 结构化 error
     9 test_length_is_not_a_final_answer            截断不能当答案
 
+【关于"本项目里不会自然出现"的分支】
+    第 4、7 条测试是**手动造出** permanent 错误的（set_weather_failures(["permanent"])），
+    因为默认运行里 fetch_weather 只会产生 transient。
+    第 5、8 条则直接构造 bad_input：前者传一个不存在的工具名，后者传坏 JSON。
+    注意 bad_input **不经过 _failure_plan**——它由 execute_tool 的验证层产生，
+    所以只能靠"喂错输入"来覆盖。
+    这类"造出来才能测"的分支是有意保留的：真实系统里 401/403 很常见，
+    本地 demo 只是没有对应场景。测试负责保证这条路径不会写坏。
+
 【能证明什么、不能证明什么】
     能证明：错误分类、重试配额、permanent 停止——全部是确定性的程序行为。
     不能证明：真模型遇到 transient 错误会不会配合。**但现在已经不需要它配合**，
@@ -100,7 +109,7 @@ def test_transient_retry_is_bounded():
     )
     print("✅ test_transient_retry_is_bounded")
 
-
+# 测试脚本对于permanent（不可恢复）错误的处理，验证其完整性
 def test_permanent_error_is_not_retried():
     """不可恢复错误 → 一次都不重试。"""
     set_weather_failures(["permanent"])

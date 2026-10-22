@@ -16,6 +16,21 @@
       · 程序能判断"值得重试"           → 自动处理
       · 模型能知道"这是暂时的、怎么改"  → 需要时自己改
 
+【三类错误：谁产生、怎么触发】
+    category    由谁产生              默认运行   怎么触发（本项目）            真实系统来自
+    bad_input   execute_tool（验证）  仅模型抽风时 测试里直接喂错输入           模型填错参数 / 调错工具
+    transient   工具实现（fetch）     一定会    _failure_plan 第 1 项就是它     超时 / 429 / 连接失败
+    permanent   工具实现（fetch）     不会       手动把 "permanent" 放进计划    401 / 403 / 404
+
+    ⚠️ 关键区分：**_failure_plan 只控制工具层（fetch_weather）的失败。**
+       bad_input 不经过计划——它由验证层在"模型给错参数 / 调错工具"时产生，
+       所以它在默认运行里出不出现，取决于模型这一次有没有犯错（不确定）；
+       而 transient 是 __main__ 写死的第 1 项失败，**每次运行必定触发**。
+
+    ⚠️ permanent 分支是为真实系统预留的：此 demo 的默认计划里没有它。
+       保留的目的是让"不可恢复错误"这条处理路径**能被测试覆盖**，
+       属于有意的完整性覆盖，不是冗余代码（test5 用 ["permanent"] 手动造出来）。
+
 【和练习 3 的关系】
     骨架相同（同一套循环、同样三个出口），差别有两处：
       ① observation 从 str 变成 dict（回灌时要 json.dumps）
@@ -43,8 +58,11 @@ MODEL = os.environ.get("MODEL", "qwen2.5:3b")
 # 【阅读图例】⭐ 核心（逐行吃透）｜🟢 必读（agent 机制）｜🟡 看关键（只看外层）｜⚪ 可跳过（业务/胶水）
 
 _failure_plan: list[bool | str] = [True, False]
-# list[bool | str] 是类型注解（去掉不影响运行）：列表元素可以是 bool 或 str。
-# 兼容两种写法：True/"transient" = 暂时性失败，"permanent" = 不可恢复失败，False = 成功。
+# list[bool | str] 是类型注解（去掉不影响运行）：元素可以是 bool 或 str。
+#   True / "transient" → 暂时性失败   "permanent" → 不可恢复失败   False → 成功
+# ⚠️ str 这种写法**只会出现在测试里**（test5 用 ["permanent"] 造出永久错误）。
+#    默认的 __main__ 只用 bool，所以正常运行永远不会出现字符串——
+#    它存在的意义是"让不常见的分支也能被测试覆盖"。
 
 # 【⚪ 可跳过】失败夹具：用一个全局列表控制"第几次调用会失败"
 #   True / "transient" → 暂时性失败；"permanent" → 不可恢复失败；False → 成功
@@ -64,6 +82,8 @@ def fetch_weather(city: str) -> dict:
     plan = _failure_plan.pop(0) if _failure_plan else False
     if plan is True or plan == "transient":
         return {"error": "network timeout", "category": "transient", "retry_hint": "try again in 1s"}
+    # permanent 分支：本项目默认运行不会走到（只有test5会把 "permanent" 放进计划），
+    # 保留它是为了让"不可恢复错误"这条路径可被验证。
     if plan == "permanent":
         return {"error": "unauthorized", "category": "permanent", "retry_hint": ""}
     # 写死了预测为rain 温度24
@@ -121,6 +141,7 @@ def execute_tool(name: str, raw_arguments: str) -> tuple[dict, dict, bool]:
 #     · transient（暂时性）→ 自动重试，最多 MAX_TRANSIENT_RETRIES 次
 #     · bad_input（模型填错）→ 不重试，回灌给模型自己改
 #     · permanent（不可恢复）→ 不重试，由 loop 立即停止
+#       （本项目默认运行产生不了它；测试用 ["permanent"] 覆盖这条路径）
 # 返回 (args, obs, is_error, attempts)：attempts 是实际尝试次数（1 = 没重试）
 MAX_TRANSIENT_RETRIES = 2
 
@@ -218,6 +239,7 @@ def react_loop(question: str, max_iter: int = 5, client: Any = None) -> dict:
                 "is_error": is_error,
             })
             # 不可恢复错误：不浪费剩余轮次，立即停止
+            # （本项目默认运行走不到这里；仅测试覆盖）
             if is_error and obs.get("category") == "permanent":
                 return {
                     "final": None,
