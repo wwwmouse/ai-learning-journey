@@ -49,14 +49,16 @@ from openai import OpenAI
 MODEL = os.environ.get("MODEL", "qwen2.5:3b")
 # 【阅读图例】⭐ 核心（逐行吃透）｜🟢 必读（agent 机制）｜🟡 看关键（只看外层）｜⚪ 可跳过（业务/胶水）
 
+_failure_plan: list[bool] = [True, False]
+# 这里的':list[bool]'是类型注解，去除不影响正常运行
+# 作用是在实际开发中让人知道这里需要一个什么类型的变量，类似函数参数类型的写法
+# 变量名:类型=值
+
 # 【⚪ 可跳过】失败夹具：用一个全局列表控制"第几次调用会失败"
 #   [True, False] → 第 1 次失败、第 2 次成功；[] → 一直成功
-# ⚠️ 它是**全局可变状态**：每个测试都必须先 set_weather_failures()，否则互相污染。
-_failure_plan: list[bool] = [True, False]
-
-
+#   此函数的意义就是给_failure_plan全局变量一个可修改的接口
 def set_weather_failures(plan: list[bool]) -> None:
-    global _failure_plan
+    global _failure_plan # 使得后续赋值替换模块级变量
     _failure_plan = list(plan)
 
 
@@ -65,9 +67,12 @@ def set_weather_failures(plan: list[bool]) -> None:
 #    —— 这就是本练习的全部要点：错误是数据，不是异常。
 def fetch_weather(city: str) -> dict:
     """假的 weather API、用 _failure_plan 決定這次該失敗還是成功。"""
+    # 条件表达式检查列表非空就执行.pop()函数取出并删除列表的第一个元素
+    # 若列表为空直接返回False
     should_fail = _failure_plan.pop(0) if _failure_plan else False
     if should_fail:
         return {"error": "network timeout", "retry_hint": "try again in 1s"}
+    # 写死了预测为rain 温度24
     return {"city": city, "forecast": "rain", "temperature_c": 24}
 
 
@@ -93,24 +98,25 @@ TOOLS_SPEC = [
 
 # 【🟢 必读】派发 + 验证，并**把所有失败都变成结构化 dict**（不抛异常、也不返回字符串）
 #   未知工具 / 坏 JSON / 参数不对 → {"error": ..., "retry_hint": ...}
-# 返回三元组 (args, observation_dict, is_error)：
+#   返回三元组 (args, observation_dict, is_error)：
 #   · observation 是 **dict**（不是字符串）——所以回灌给模型时要 json.dumps
 #   · is_error 由 `"error" in observation` 判断（注意：本练习还没用它做分流）
 def execute_tool(name: str, raw_arguments: str) -> tuple[dict, dict, bool]:
     """Validate an untrusted call and always return a structured result."""
-    if name != "fetch_weather":
+    if name != "fetch_weather": # 检查调用函数名字
         return {}, {"error": "tool not allowed", "retry_hint": "choose fetch_weather"}, True
-    try:
-        args = json.loads(raw_arguments)
-    except (TypeError, json.JSONDecodeError):
+    try:                        # 尝试json object->python dict
+        args = json.loads(raw_arguments) 
+    except (TypeError, json.JSONDecodeError):   
         return {}, {"error": "invalid arguments", "retry_hint": "send a JSON object with city"}, True
     if (
-        not isinstance(args, dict)
-        or set(args) != {"city"}
-        or not isinstance(args.get("city"), str)
-        or not args["city"].strip()
+        not isinstance(args, dict) # 确认类型是dict
+        or set(args) != {"city"}   # dict中参数名key必须是TOOLS_SPEC中指定的city
+        or not isinstance(args.get("city"), str) # 参数值是str类型
+        or not args["city"].strip() # 非空
     ):
         return args if isinstance(args, dict) else {}, {"error": "invalid arguments", "retry_hint": "city must be a non-empty string"}, True
+    # 拿到fetch_weaather里写死的天气预测和温度
     observation = fetch_weather(args["city"].strip())
     return args, observation, "error" in observation
 
@@ -136,8 +142,10 @@ def react_loop(question: str, max_iter: int = 5, client: Any = None) -> dict:
         msg = resp.choices[0].message
         text = msg.content or ""
         tool_calls = msg.tool_calls or []
-
+        
+        # 把pydantic对象自动转成需要的dict格式
         assistant_entry: dict = {"role": "assistant", "content": text}
+        # 如果模型点单了
         if tool_calls:
             assistant_entry["tool_calls"] = [
                 {
@@ -147,11 +155,15 @@ def react_loop(question: str, max_iter: int = 5, client: Any = None) -> dict:
                 }
                 for tc in tool_calls
             ]
+        # 把新message加到messages内
         messages.append(assistant_entry)
 
         finish_reason = resp.choices[0].finish_reason
+        # 如果模型没点单
         if not tool_calls:
+            # 记录一条没有工具的轨迹
             trace.append({"step": step, "assistant_text": text, "tool": None, "obs": None})
+            # 正常结束退出
             if finish_reason == "stop":
                 return {"final": text, "trace": trace, "steps": step + 1}
             return {
@@ -159,7 +171,7 @@ def react_loop(question: str, max_iter: int = 5, client: Any = None) -> dict:
                 "trace": trace,
                 "steps": step + 1,
                 "terminal_reason": finish_reason or "missing_tool_call",
-                "truncated": finish_reason == "length",
+                "truncated": finish_reason == "length", # 是否长度过大导致截断
             }
 
         for tc in tool_calls:
@@ -172,7 +184,8 @@ def react_loop(question: str, max_iter: int = 5, client: Any = None) -> dict:
             })
             trace.append({"step": step, "assistant_text": text, "tool": tc.function.name, "tool_input": args, "obs": obs})
 
-    return {"final": None, "trace": trace, "steps": max_iter, "truncated": True}
+    # 循环到上限导致截断
+    return {"final": None, "trace": trace, "steps": max_iter, "truncated": True} 
 
 
 # 【⚪ 可跳过】真机自检：只有直接运行本文件时才执行；被 test5 导入时不触发。
