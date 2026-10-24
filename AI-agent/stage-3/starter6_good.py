@@ -66,24 +66,35 @@ def convert_temperature(value: float, unit: str) -> dict:
 
 # 【⭐ 核心 —— 本练习唯一要研究的东西】
 # 好在哪里，逐条对照 bad 版：
-#   ① description 写明"何时用 / 何时不要用"（process_data 那句 "Do not use for ..."）
-#   ② value 是 number，data 是 array of object —— 类型即约束
 #   ③ required 列全（value + unit / data + operation）
-#   ④ enum 收敛 unit 与 operation 的取值空间
-#   ⑤ additionalProperties: false 禁止多余字段
 TOOLS_SPEC = [
     {
         "type": "function",
         "function": {
             "name": "process_data",
+            
+            # 1.description 写明"何时用 / 何时不要用"
             "description": "仅用于汇总结构化 JSON 表格行；不要用于温度换算。",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "data": {"type": "array", "items": {"type": "object"}, "description": "Rows to inspect"},
-                    "operation": {"type": "string", "enum": ["count_rows", "list_columns"]},
+                    "data": {"type": "array", 
+                             
+                             # 2.写明元素类型
+                             "items": {"type": "object"}, 
+                             
+                             # 3.增加参数描述
+                             "description": "待检查的行"},
+                    "operation": {
+                        "type": "string",
+                        
+                        # 4.enum 列举取值空间
+                        "enum": ["count_rows","list_columns"]},
                 },
+                # 5.required列出必填字段
                 "required": ["data", "operation"],
+                
+                # 6.additionalProperties禁止多余字段
                 "additionalProperties": False,
             },
         },
@@ -92,14 +103,28 @@ TOOLS_SPEC = [
         "type": "function",
         "function": {
             "name": "convert_temperature",
+            # 1.description 写明具体使用场景
             "description": "当用户要求在华氏度与摄氏度之间换算温度时使用。",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "value": {"type": "number", "description": "需要换算的温度数值"},
-                    "unit": {"type": "string", "enum": ["celsius", "fahrenheit"], "description": "输入数值所使用的温度单位"},
+                    "value": {
+                        "type": "number",
+                        
+                        # 2.增加参数描述
+                        "description": "需要换算的温度数值"},
+                    
+                    "unit": {
+                        "type": "string",
+                        
+                        # 3.enum 列举取值空间
+                        "enum": ["celsius", "fahrenheit"],
+                        "description": "输入数值所使用的温度单位"},
                 },
+                # 4.required列出必填字段
                 "required": ["value", "unit"],
+                
+                # 5.additionalProperties禁止多余字段
                 "additionalProperties": False,
             },
         },

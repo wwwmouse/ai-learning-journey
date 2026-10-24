@@ -66,7 +66,9 @@ TOOLS_SPEC = [
         "function": {
             "name": "process_data",
             "description": "处理数据",
-            "parameters": {"type": "object", "properties": {"data": {"type": "string"}}},
+            "parameters": {
+                "type": "object",
+                "properties": {"data": {"type": "string"}}},
         },
     },
     {
