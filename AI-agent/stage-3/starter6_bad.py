@@ -65,7 +65,7 @@ TOOLS_SPEC = [
         "type": "function",
         "function": {
             "name": "process_data",
-            "description": "Process data.",
+            "description": "处理数据",
             "parameters": {"type": "object", "properties": {"data": {"type": "string"}}},
         },
     },
@@ -73,7 +73,7 @@ TOOLS_SPEC = [
         "type": "function",
         "function": {
             "name": "convert_temperature",
-            "description": "Convert a value.",
+            "description": "转换数值",
             "parameters": {
                 "type": "object",
                 "properties": {"value": {"type": "string"}, "unit": {"type": "string"}},
@@ -148,7 +148,7 @@ def select_and_run(question: str, client: Any = None) -> dict:
         return {"tool": None, "tool_input": {}, "observation": {"error": f"expected one tool call; received {len(tool_calls)}"}}
     call = tool_calls[0]
     args, observation = execute_tool(call.function.name, call.function.arguments)
-    return {"tool": call.function.name, "tool_input": args, "observation": observation}
+    return {"tool": call.function.name, "tool_input": args, "observation": observation, 'context':msg.content}
 
 
 # 【⚪ 可跳过】真机自检：刻意宽松 —— 坏 schema 不保证选对，只保证"能产出一次选择"。
@@ -158,7 +158,7 @@ if __name__ == "__main__":
     result = select_and_run(question)
     print(f"   tool: {result['tool']}")
     print(f"   observation: {result['observation']}")
-
+    print(f"   context(点单时通常为空): {result.get('context')}")
     # 寬鬆驗證：bad schema 不保證選對 tool、但至少要產出一個 tool call
     assert result["tool"] is not None, "even bad schema should produce an observable selection"
     assert result["observation"] is not None, "selected tool should produce an observable result"
