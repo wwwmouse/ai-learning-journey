@@ -2,6 +2,7 @@
 
 【这个文件在做什么】
     与 starter6_bad.py 组成**对照组**：同一道题、同一套程序，**只改 TOOLS_SPEC**。
+    本脚本只做一次询问，拿到模型的点单后直接退出分析点单工具，不存在agent_loop
     这一版按五条规则把 schema 写"好"：
       · description 说清"何时用 + 何时不要用"
       · 参数用正确类型（number / array，而不是一律 string）
@@ -75,7 +76,7 @@ TOOLS_SPEC = [
         "type": "function",
         "function": {
             "name": "process_data",
-            "description": "Use only to summarize structured JSON table rows. Do not use for temperature conversion.",
+            "description": "仅用于汇总结构化 JSON 表格行；不要用于温度换算。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -91,12 +92,12 @@ TOOLS_SPEC = [
         "type": "function",
         "function": {
             "name": "convert_temperature",
-            "description": "Use this when the user asks to convert temperatures between Fahrenheit and Celsius.",
+            "description": "当用户要求在华氏度与摄氏度之间换算温度时使用。",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "value": {"type": "number", "description": "Temperature value to convert"},
-                    "unit": {"type": "string", "enum": ["celsius", "fahrenheit"], "description": "Unit of the input value"},
+                    "value": {"type": "number", "description": "需要换算的温度数值"},
+                    "unit": {"type": "string", "enum": ["celsius", "fahrenheit"], "description": "输入数值所使用的温度单位"},
                 },
                 "required": ["value", "unit"],
                 "additionalProperties": False,
@@ -174,18 +175,19 @@ def select_and_run(question: str, client: Any = None) -> dict:
         return {"tool": None, "tool_input": {}, "observation": {"error": f"expected one tool call; received {len(tool_calls)}"}}
     call = tool_calls[0]
     args, observation = execute_tool(call.function.name, call.function.arguments)
-    return {"tool": call.function.name, "tool_input": args, "observation": observation}
+    return {"tool": call.function.name, "tool_input": args, "observation": observation, "context": msg.content}
 
 
 # 【⚪ 可跳过】真机自检：这一版断言更严 —— 好 schema 下预期选对且算对 89.6°F。
 # ⚠️ 但注意：单次成功不能证明"好 schema 更好"，必须固定题目重跑多次。
 if __name__ == "__main__":
-    question = "Convert 32 Celsius to Fahrenheit."
+    question = "将32摄氏度转化为华氏度"
     print(f"❓ 問題：{question}（using Ollama {MODEL}、GOOD schema）")
     result = select_and_run(question)
     print(f"   tool: {result['tool']}")
     print(f"   tool_input: {result.get('tool_input')}")
     print(f"   observation: {result['observation']}")
+    print(f"   context(点单时通常为空): {result.get('context')}")
 
     assert result["tool"] == "convert_temperature", f"預期 convert_temperature、得到 {result['tool']}"
     assert result["observation"] == {"value": 89.6, "unit": "fahrenheit"}
