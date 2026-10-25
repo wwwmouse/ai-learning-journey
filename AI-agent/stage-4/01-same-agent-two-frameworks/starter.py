@@ -1,18 +1,17 @@
-"""Stage 4 練習 1：同一個 agent、兩個 framework — LangGraph + Ollama（Path A、默認）。
+r"""Stage 4 練習 1：同一個 agent、兩個 framework — LangGraph + Ollama（Path A、默認）。
 
 任務：搜尋 + 摘要的小 agent。給一個 query、agent 用 search tool 拿資料、回一段摘要。
 這份用 LangGraph。對照的 CrewAI 版本見 starter_crewai.py。
 
-跑法：
-    pip install -r requirements.txt
-    ollama pull qwen2.5:3b
-    ollama serve
-    python starter.py
+【在哪跑】
+        VS Code 整合終端（Ctrl+` 開啟 / 或選單「終端機 → 新增終端」），
+        終端類型必須是 PowerShell（VS Code 的預設那個；Windows PowerShell 5.1 或 PowerShell 7 都行）。
+        先切到本檔案所在的練習資料夾，再執行下面的指令：
+        cd E:\VScode\AI-learning\AI-agent\stage-4\01-same-agent-two-frameworks
 
-驗證：
-    python test.py
-
-模型 API 預算：$0（Ollama）；本機硬體與電力仍有成本。對照 Anthropic 版見 starter_anthropic.py。
+【怎麼跑】 本練習已建好 .venv = Python 3.11。
+    .\.venv\Scripts\python.exe starter.py
+    
 """
 
 from __future__ import annotations

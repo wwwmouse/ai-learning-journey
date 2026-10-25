@@ -1,9 +1,13 @@
-"""Stage 4 練習 1 自我驗證 — Path A（Ollama starter.py，LangGraph 版）。
+r"""Stage 4 練習 1 自我驗證 — Path A（Ollama starter.py，LangGraph 版）。
 
-跑法：
-    python test.py
+【在哪跑】VS Code 整合終端（Ctrl+` 開啟 / 或選單「終端機 → 新增終端」），
+        終端類型必須是 PowerShell（VS Code 的預設那個；Windows PowerShell 5.1 或 PowerShell 7 都行）。
+        先切到本檔案所在的練習資料夾，再執行下面的指令：
+        cd E:\VScode\AI-learning\AI-agent\stage-4\01-same-agent-two-frameworks
 
-用 mock LLM 取代真實 API、不打網路。
+【怎麼跑】本練習已建好 .venv = Python 3.11。
+    .\.venv\Scripts\python.exe test.py
+
 """
 
 from __future__ import annotations
