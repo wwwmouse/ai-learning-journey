@@ -1,0 +1,10 @@
+# 安裝（用 VS Code 整合終端、終端類型 PowerShell；先 cd 到本練習資料夾）：
+#   cd E:\VScode\AI-learning\AI-agent\stage-4\01-same-agent-two-frameworks
+#   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+# 說明：本練習使用 Python 3.11；crewai 1.15.x 的 Requires-Python 是 >=3.10,<3.14，
+#       所以系統的 Python 3.14 裝不了，別用 python / python3 / python3.12 去裝。
+langgraph>=1.2,<2.0
+langchain-openai>=1.6,<2.0
+langchain-anthropic>=1.7,<2.0
+langchain-core>=1.6,<2.0
+crewai>=1.15,<2.0
