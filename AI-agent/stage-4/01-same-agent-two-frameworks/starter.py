@@ -3,6 +3,13 @@ r"""Stage 4 练习 1：同一个 agent、两个 framework — LangGraph + Ollama
 任务：搜寻 + 摘要的小 agent。给一个 query、agent 用 search tool 拿资料、回一段摘要。
 这份用 LangGraph。对照的 CrewAI 版本见 starter_crewai.py。
 
+【这个练习要你比较什么】（本档 = LangGraph，对照 starter_crewai.py = CrewAI）
+    同一个任务写两遍，比的是「框架替你接了什么线、又把什么藏起来」：
+      - starter.py（本档）  你亲手用 node + edge 画出回圈 → 控制流看得见，但要自己接线
+      - starter_crewai.py  用 Agent + Task + Crew 描述角色与任务 → 上手快，但回圈与工具接线被藏起来
+    验收：test.py（LangGraph）与 test_crewai.py（CrewAI）都要跑，两份都是离线 mock。
+    想直接把图印出来：show_graph.py。
+
 【这个文件在做什么】（链路 / 状态 / 出口）
     链路：run() → build_graph() 组图 → agent_node 问模型 → should_continue 决定
           →（模型有点单时）tools: tool_node 执行 search、结果包成 ToolMessage → 回 agent_node
