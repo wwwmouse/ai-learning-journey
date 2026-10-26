@@ -1,11 +1,7 @@
 r"""Stage 4 练习 1 自我验证 — Path A（Ollama starter.py，LangGraph 版）。
 
-【在哪跑】VS Code 整合终端（Ctrl+` 开启 / 或选单「终端机 → 新增终端」），
-          终端类型必须是 PowerShell（VS Code 的预设那个；Windows PowerShell 5.1 或 PowerShell 7 都行）。
-          先切到本档案所在的练习资料夹，再执行下面的指令：
-              cd E:\VScode\AI-learning\AI-agent\stage-4\01-same-agent-two-frameworks
-
-【怎么跑】本练习已建好 .venv = Python 3.11。
+【跑法】VS Code 集成终端（PowerShell），先 cd 到本练习目录：
+    cd E:\VScode\AI-learning\AI-agent\stage-4\01-same-agent-two-frameworks
     .\.venv\Scripts\python.exe test.py
 
 【这份验收单钉住什么】（读测试时只问一句：它在防哪种改坏？）
