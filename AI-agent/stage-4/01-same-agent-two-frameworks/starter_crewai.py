@@ -1,17 +1,20 @@
-"""Stage 4 练习 1：同一个 agent、CrewAI 版本对照（Ollama 预设）。
+r"""Stage 4 练习 1：同一个 agent、CrewAI 版本对照（Ollama 预设）。
 
 跟 starter.py (LangGraph) 同一个任务：search + summarize。
 看程式码风格差异——CrewAI 用 Agent + Task 抽象、LangGraph 用 StateGraph + node。
 
-跑法：
-    pip install -r requirements.txt   # 含 crewai
-    ollama pull qwen2.5:3b
-    ollama serve
-    python starter_crewai.py
+【跑法】VS Code 集成终端（PowerShell），先 cd 到本练习目录；ollama 另开一个终端跑：
+    cd E:\VScode\AI-learning\AI-agent\stage-4\01-same-agent-two-frameworks
+    ollama serve                                  # 另开一个终端，保持执行
+    .\.venv\Scripts\python.exe starter_crewai.py
+
+【验证】离线、不花钱：
+    .\.venv\Scripts\python.exe test_crewai.py
 
 模型 API 预算：$0（Ollama）；本机硬体与电力仍有成本。
 
 ⚠️ 注意：模型、prompt 与工具描述都可能改变步数；用相同题组比较，不先假设哪个 backend 较稳。
+⚠️ 首次运行 CrewAI 会在 %LOCALAPPDATA%\CrewAI 下建数据目录（框架行为）；若安全软件拦截，先放行再跑。
 """
 
 from __future__ import annotations
