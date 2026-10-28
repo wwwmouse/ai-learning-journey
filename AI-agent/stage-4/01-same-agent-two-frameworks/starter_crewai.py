@@ -78,7 +78,7 @@ def build_crew(query: str, llm_model: str = MODEL) -> Crew:
         backstory="You search a knowledge base and give concise summaries.",  # 背景 → 拼进 prompt
         tools=[search],          # ↔ bind_tools([search]) + 你手写的 tool_node（执行/回灌）
         llm=llm_model,           # ↔ ChatOpenAI(...) 客户端对象
-        verbose=False,           # 打开后打印框架内部过程（默认关）
+        verbose=True,           # 打开后打印框架内部过程（默认关）
     )
     
     # Crew: Task = 「做什么」。description 是任务输入，expected_output 是验收标准。
@@ -91,7 +91,7 @@ def build_crew(query: str, llm_model: str = MODEL) -> Crew:
     
     # Crew: Crew = 「团队」= agents + tasks，本身就描述完了整张流程。
     #       ↔ LangGraph 版：StateGraph(State) + add_node/add_edge/compile
-    return Crew(agents=[researcher], tasks=[task], verbose=False)
+    return Crew(agents=[researcher], tasks=[task], verbose=True)
 
 
 def run(query: str, llm_model: str = MODEL) -> dict:

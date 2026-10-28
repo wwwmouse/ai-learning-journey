@@ -1,2 +1,5 @@
 # 本目录（AI-agent）内产生的本地数据/工具目录，不提交
 .crewai-data/
+
+# 实测与 CrewAI 无关的空壳文件（疑似误触/重定向残留），别出现在 git 状态里
+stage-4/*/crewai
