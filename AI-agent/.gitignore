@@ -1,5 +1,8 @@
 # 本目录（AI-agent）内产生的本地数据/工具目录，不提交
 .crewai-data/
 
-# 实测与 CrewAI 无关的空壳文件（疑似误触/重定向残留），别出现在 git 状态里
+# CrewAI 运行产物：kickoff 后会在当前目录写 .crewai/last_run.json（tracing 记录）
+.crewai/
+
+# 偶发的 0 字节 crewai 空文件（与上面同一批产物，不影响运行）
 stage-4/*/crewai
