@@ -1,0 +1,3 @@
+﻿# Path A（本机 Ollama）只需要 crewai 本体。
+# 课程原版是 crewai[anthropic] + litellm ——那是给有 Anthropic API key 的 Path B 用的，本机用不到。
+crewai>=1.15,<2.0
