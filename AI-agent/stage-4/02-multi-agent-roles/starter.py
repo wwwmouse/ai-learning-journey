@@ -5,7 +5,7 @@ r"""Stage 4 练习 2：用 CrewAI + Ollama 做有界的三角色交接。
 - Writer：写稿（拿 Researcher 的结果写成 blog 段落）
 - Critic：审稿（检查事实依据 + 语气）
 
-这里使用 Process.sequential，让三个角色像接力一样依序交接。
+这里 Crew 的 process 使用 Process.sequential，让三个角色像接力一样依序线性交接。
 
 【这个文件在做什么】（链路 / 状态 / 出口）
     链路：run() → build_crew() 建 3 个 Agent + 3 个 Task → kickoff()
@@ -155,6 +155,11 @@ def build_crew(topic: str, llm_model: str = MODEL) -> Crew:
         agent=critic,
         context=[research_task, write_task],
     )
+
+    # 【强制中文输出】框架自己的提示词是英文（crewai 只内置 translations/en.json），
+    # 模型容易被带成英文；给三个任务统一补一句中文要求（实测有效，不影响测试）。
+    for _task in (research_task, write_task, critic_task):
+        _task.description += "（请用简体中文回答，不要输出英文。）"
 
     # ⭐ Crew: 把每个agent对应的tasks打包成一个对象返回
     #          process=Process.sequential → 按 tasks 列表顺序执行（不是让模型自己决定顺序）。
