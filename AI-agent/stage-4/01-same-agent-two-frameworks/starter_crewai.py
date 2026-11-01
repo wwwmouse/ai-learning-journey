@@ -91,6 +91,14 @@ def build_crew(query: str, llm_model: str = MODEL) -> Crew:
     
     # Crew: Crew = 「团队」= agents + tasks，本身就描述完了整张流程。
     #       ↔ LangGraph 版：StateGraph(State) + add_node/add_edge/compile
+
+    # 【verbose 输出怎么读】Crew(verbose=True) 时，每个 Task 一圈：
+    #   Task Started → Agent Started →（该 Agent 有 tools 才有 Tool Execution Started/Completed）
+    #   → Agent Final Answer → Task Completion
+    #   任务串完 → Crew Execution Completed（最后可能还有 Tracing Status，属遥测，忽略）
+    #   注意：任务之间的交接没有单独面板；靠 Task.context 把上游输出注入下一个 Task。
+    #   开关差异：Crew(verbose=True) 是全局（含 Task/Tool/Crew 面板）；
+    #             Agent(verbose=True) 只让该 agent 汇报自己的 Started/Final Answer。
     return Crew(agents=[researcher], tasks=[task], verbose=True)
 
 

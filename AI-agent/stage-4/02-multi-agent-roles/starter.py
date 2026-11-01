@@ -160,12 +160,31 @@ def build_crew(topic: str, llm_model: str = MODEL) -> Crew:
     #          process=Process.sequential → 按 tasks 列表顺序执行（不是让模型自己决定顺序）。
     #        ↔ 练习 1 只有 1 个 Task，process 取什么值都看不出差别；
     #          换成 Process.hierarchical 会变成「主管分派」，行为完全不同。
+    
     return Crew(
         agents=[researcher, writer, critic],
         tasks=[research_task, write_task, critic_task],
-        process=Process.sequential,
+        process=Process.sequential,   # 枚举成员：顺序由你定；换成 hierarchical 需 manager_llm
         verbose=True,
     )
+        
+    # 【process / Process 是什么】
+    #   process= 是 Crew 的参数：告诉框架「多个 Agent 怎么协作」，取值来自枚举 Process。
+    #   Process 是 CrewAI 的 Enum，本版本只有两个成员：
+    #     Process.sequential   → 按 tasks 列表顺序逐个跑（流水线，本档用它）
+    #     Process.hierarchical → 多一个 manager Agent 负责规划/分派任务；
+    #     需要 manager_llm 或 manager_agent 参数，否则 Crew 构造就报 ValidationError
+    #   process 决定 kickoff() 的调度方式，相当于框架内置的「workflow 路线」；
+    #   练习 3 的 LangGraph 图，是把「路线」交给你自己画。
+
+    # 【verbose 输出怎么读】Crew(verbose=True) 时，每个 Task 一圈：
+    #   Task Started → Agent Started →（该 Agent 有 tools 才有 Tool Execution Started/Completed）
+    #   → Agent Final Answer → Task Completion
+    #   三个 Task 串完 → Crew Execution Completed（最后可能还有 Tracing Status，属遥测，忽略）
+    #   注意：任务之间的交接没有单独面板；靠 Task.context 把上游输出注入下一个 Task。
+    #   开关差异：Crew(verbose=True) 是全局（含 Task/Tool/Crew 面板）；
+    #             Agent(verbose=True) 只让该 agent 汇报自己的 Started/Final Answer。
+
 
 
 # 🟡 看关键：kickoff 没有返回值类型保证——它给的是 CrewOutput；这里转成 str 并附上可观察的停止条件。
