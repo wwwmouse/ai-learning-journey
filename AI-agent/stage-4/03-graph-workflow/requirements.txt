@@ -1,0 +1,5 @@
+# Path A（本机 Ollama）只需要这三样。
+# 课程原版还有 langchain-anthropic —— 那是给有 Anthropic API key 的 Path B 用的，本机用不到。
+langgraph>=1.2,<2.0
+langchain-core>=1.6,<2.0
+langchain-openai>=1.6,<2.0
