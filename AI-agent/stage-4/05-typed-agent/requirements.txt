@@ -1,0 +1,3 @@
+# 本练习只需要 Pydantic AI + Pydantic（Path A 走 Ollama，不需要额外的 provider SDK）。
+pydantic-ai>=2.35,<3.0
+pydantic>=2.13,<3.0
