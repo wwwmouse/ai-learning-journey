@@ -56,7 +56,8 @@ OLLAMA_BASE = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434/v1")
 #    注意最后一句：schema 合法 ≠ 内容真实 —— 它只保证「形状对」。
 class AnswerWithConfidence(BaseModel):
     """已校验的数据形状；它不是答案为真的证据。"""
-    # Field 约束：最小长度 / 数值范围 / 列表至少一项
+    # Field：用于给模型字段提供附加规则和说明
+    # 约束：最小长度 / 数值范围 / 列表至少一项
     answer: str = Field(min_length=1, description="一句谨慎、非空的回答。")
     confidence: float = Field(ge=0.0, le=1.0, description="置信度，0.0 到 1.0。")
     sources: list[str] = Field(min_length=1, description="至少一个非空的来源标签。")
@@ -66,7 +67,8 @@ class AnswerWithConfidence(BaseModel):
     @field_validator("answer")
     @classmethod
     def answer_is_not_blank(cls, value: str) -> str:
-        if not value.strip():
+        # strip返回去除首尾空字符的新字符串
+        if not value.strip(): 
             raise ValueError("answer 不能是空白字符串")
         return value.strip()
 
@@ -80,6 +82,8 @@ class AnswerWithConfidence(BaseModel):
 
 # 🟡 看关键：模型接线。OpenAIChatModel + OpenAIProvider(base_url=...) 指向本机 Ollama。
 #    ↔ 练习 1：ChatOpenAI(base_url=...)、练习 2：Agent(llm="ollama/qwen2.5:3b") 字符串。
+#   OpenAIChatModel 是 Pydantic AI 提供的类，负责表示一个通过 OpenAI 兼容接口对话的模型。
+#   OpenAIProvider 同理，负责连接配置，处理请求去向/api_key
 def make_ollama_model() -> OpenAIChatModel:
     """用目前 Pydantic AI 的 OpenAIChatModel 连到本机 Ollama。"""
     return OpenAIChatModel(MODEL, provider=OpenAIProvider(base_url=OLLAMA_BASE, api_key="ollama"))
@@ -92,6 +96,7 @@ def make_ollama_model() -> OpenAIChatModel:
 def build_agent(model: Any | None = None) -> Agent:
     """建立会重试两次、并要求 AnswerWithConfidence 的 agent。"""
     chosen = model or make_ollama_model()
+    
     # 两种模式按模型切换（原因见上面 import 处的注释）：
     #   - 官方 TestModel：不支持 NativeOutput（会抛 UserError）→ 用默认 ToolOutput；
     #   - 真模型（Ollama qwen2.5:3b）：默认 ToolOutput / PromptedOutput 都会超重试，
@@ -102,7 +107,7 @@ def build_agent(model: Any | None = None) -> Agent:
         output_type=output_type,
         retries=2,
         instructions=(
-            "返回一个谨慎的 AnswerWithConfidence：answer 非空、confidence 在 0 到 1 之间、"
+            "返回一个谨慎的 AnswerWithConfidence：answer 非空、confidence 在 1 到 10 之间、"
             "sources 至少一个标签。schema 合法并不代表内容真实。"
         ),
     )
@@ -113,6 +118,8 @@ def build_agent(model: Any | None = None) -> Agent:
 #    「业务契约」再检查一遍（校验器已挡掉空白/越界，这里防的是将来改 schema 时漏掉）。
 def run(question: str, model: Any | None = None) -> AnswerWithConfidence:
     """执行 agent，并在返回前再检查本练习的结果契约。"""
+    
+    # run_sync()真正发起模型请求，让build_agent返回的模型工作
     output = build_agent(model).run_sync(question).output
     if not output.answer or not output.sources or not 0.0 <= output.confidence <= 1.0:
         raise RuntimeError("校验后的输出仍不符合本练习的结果契约。")
