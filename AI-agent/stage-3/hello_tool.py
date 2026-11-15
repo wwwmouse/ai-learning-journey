@@ -19,49 +19,14 @@
     模型不会执行工具。它只负责“填单”，执行权始终在程序手里。
     “26”这个数字来自 get_weather 里写死的假数据——模型是转述者，不是数据源。
     
-【阅读指引】
-    下面是笔记，分三块：
-      · ChatCompletion 响应结构树（含 tool_calls[0] 的完整层级与订单号 id）
-      · 四种 message 角色各自带哪些字段
-      · 三条最容易踩的规则（顺序与配平 / messages 是有状态的历史 / 模型不执行工具）
-    笔记之后才是代码，按“请求 → 回填历史 → 验单执行 → 第二次请求”的顺序排列。
+【笔记位置】
+    四种 message 角色、tool_calls 的层级、三条配平规则——已移到共用笔记
+    stage-3/NOTES-stage-3.md §2.4「消息格式底座」，本文件不再重复。
+    代码按“请求 → 回填历史 → 验单执行 → 第二次请求”的顺序排列。
 """
-
+# 返回 Pydantic 模型对象
 # first = client.chat.completions.create(...)   → ChatCompletion
-# ├── choices[0]
-# │   ├── message
-# │   │   ├── role: "assistant"     ← 消息发出者
-# │   │   ├── content: 文字回答（点单那轮通常是 None 或 ""，取决于供应商）
-# │   │   └── tool_calls: 模型点的单（没有就是 None；但要配合 finish_reason 判读）
-# │   │       └── [0]
-# │   │           ├── id: "call_63ypy0ya"        ← 订单号！tool 消息靠它认领返回的结果
-# │   │           ├── type: "function"
-# │   │           └── function
-# │   │               ├── name: "get_weather"    ← 函数名，必须和下面 def get_weather 一致
-# │   │               └── arguments: '{"city":"台北","unit":"celsius"}'
-# │   │                                           参数：JSON 字符串，要 json.loads 成 dict
-# │   └── finish_reason: "stop" | "tool_calls" | "length" | "content_filter"
-# │                                           为什么停：只有 stop 才算完整答案
-# └── usage: prompt_tokens / completion_tokens / total_tokens  ← 账单（费用按请求次数累加）
-
-# message —— 所有消息的共同点：必须有 role
-# │
-# ├── role: "user"      → 带 {role, content}          用户说了什么
-# ├── role: "assistant" → 带 {role, content?, tool_calls?}   模型说了什么 / 点了什么单
-# ├── role: "tool"      → 带 {role, tool_call_id, content}   工具结果（必须有订单号）
-# │                       content 必须是字符串（dict 要先 json.dumps）；另有可选 name
-# └── role: "system"    → 带 {role, content}          系统设定（以后会见到，通常放最前）
-# content：user / system / tool 消息必有（说话的内容 / 工具结果文本）；assistant 可能有也可能没有
-# tool_calls：只有 assistant 消息可能有——因为只有模型会点单
-# tool_call_id：只有 tool 消息必须有——因为只有工具结果需要认领订单
-
-# 三条容易踩的规则：
-# 1. 顺序与配平：带 tool_calls 的 assistant 消息必须先于对应的 tool 消息；
-#    模型点了几单，程序就要回几条 tool 消息——少一条 API 直接报错。
-# 2. messages 是“有状态的对话历史”：每轮都要追加，不是替换。
-#    这也是练习 3 能连续多步的前提。
-# 3. 模型不执行工具：tool_calls 只是“请求”，执行永远是程序的事；
-#    工具返回的内容属于不可信输入，不能当成指令。
+# （消息结构 / tool_calls 层级 / 三条配平规则：见 NOTES-stage-3.md §2.4）
 
 import json
 
