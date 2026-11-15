@@ -33,32 +33,143 @@
 
 演进方向是**把原先靠人记的隐式约定（配对、验证、停止、错误归类）逐步写成代码里显式、可测试、可分流的契约**；`starter6` 的对照组则把「schema 是说明书、不是程序保证」这一条隔离出来单独验证。
 
+### 2.4 消息格式底座（贯穿全 stage｜参考块，不计入 30 秒速读预算）
+
+同一套消息结构从 `hello_tool.py` 一直用到 `starter6`，因此从单个脚本移到这里；各脚本只留一行指针。
+
+| role | 必带字段 | 作用 | 本 stage 谁在用 |
+|---|---|---|---|
+| `user` | `{role, content}` | 用户输入 | 全部脚本 |
+| `assistant` | `{role, content?, tool_calls?}` | 模型说话 / 点单；带 `tool_calls` 时必须先于对应 `tool` | `hello_tool` / `starter2` / `starter3` / `starter5` / `starter6` |
+| `tool` | `{role, tool_call_id, content}` | 工具回执；`content` **只能是字符串**（dict 先 `json.dumps`） | `hello_tool` / `starter3` / `starter5` |
+| `system` | `{role, content}` | 系统设定，通常放最前 | 本 stage 未使用 |
+
+**响应侧结构**（`client.chat.completions.create(...)` 的返回）：
+
+```text
+ChatCompletion
+├── choices[0]
+│   ├── message
+│   │   ├── role: "assistant"
+│   │   ├── content: 文字回答（点单那轮通常是 "" 或 None）
+│   │   └── tool_calls[0]
+│   │       ├── id              ← 订单号；tool 消息靠它认领
+│   │       ├── type: "function"
+│   │       └── function { name, arguments(JSON 字符串) }
+│   └── finish_reason: "stop" | "tool_calls" | "length" | "content_filter"
+└── usage: prompt_tokens / completion_tokens / total_tokens
+```
+
+**它是什么类型：pydantic 对象**（这是 `.content` 能用点语法的原因）
+
+`client.chat.completions.create(...)` 返回的是 **pydantic 对象**。（这是 `.content` 能用点语法的原因）
+
+- **pydantic 是什么**：Python 的"数据模型"库。用类定义字段与类型（如 `class Message(BaseModel): content: str`），**实例化时自动校验**（类型不对直接报错），并保留字段元信息，所以 IDE 能补全、能跳转。
+- **OpenAI SDK 用它描述返回结构**：`ChatCompletion`、`ChatCompletionMessage`、`ChatCompletionMessageToolCall` 都是 pydantic 模型。
+- **因此才能写**：`assistant.content`、`assistant.tool_calls[0].function.name`；若它是 JSON 文本，必须先 `json.loads` 再 `["tool_calls"][0]["function"]["name"]`。
+
+**三种数据形态对照**
+
+| 维度 | JSON 文本（`str`） | dict | pydantic 对象 |
+|---|---|---|---|
+| 本质 | 一串字符 | 内存里的**键值结构** | 带类型与校验的**类实例** |
+| 取值 | 先 `json.loads` 再 `["key"]` | `d["key"]` | `obj.attr`（点语法） |
+| 类型提示 / IDE 补全 | 无 | 无 | **有**（IDE 知道字段） |
+| 校验 | 无 | 无 | **构造时自动做**（错类型→报错） |
+| 转 dict | `json.loads(text)` | 本来就是 | `obj.model_dump()` |
+| 转 JSON 文本 | 本来就是 | `json.dumps(d)` | `obj.model_dump_json()` |
+| 反向（→ 对象） | `Model.model_validate(json.loads(text))` | `Model.model_validate(d)` | 本来就是 |
+
+**本 stage 里三种形态各出现在哪**
+
+| 形态 | 具体位置 | 用途 |
+|---|---|---|
+| pydantic 对象 | `first` / `resp`（`ChatCompletion`）、`resp.choices[0].message`、`assistant.tool_calls[0]` | 读字段：`.content`、`.tool_calls`、`.function.name`、`.function.arguments` |
+| dict | `messages` 每条消息、`json.loads` 后的 `args`、`starter5` 的 `obs` 与错误 dict、`react_loop` 返回值、`trace` 条目 | 组历史、验证参数、返回结果 |
+| JSON 文本 | `call.function.arguments`（模型产出）、`json.dumps(obs)` 写进 `role="tool"` 的 `content` | 协议要求字符串 |
+
+**本 stage 的四个转换点**
+
+| 转换 | 代码 | 作用 |
+|---|---|---|
+| 对象 → dict | `assistant.model_dump(exclude_none=True)` | 让 SDK 响应能作为普通 dict 追加进 `messages`；`exclude_none=True` 丢掉 `None` 字段，避免把一堆空键回填进历史 |
+| JSON → dict | `json.loads(call.function.arguments)` | 把模型的参数字符串变成可下标、可验证的 dict，交给 `execute_tool` 逐关检查 |
+| dict → JSON | `json.dumps(result, ensure_ascii=False)` 作 `content` | 满足协议要求（`content` 必须是 `str`）；`ensure_ascii=False` 让中文保持可读，不变成 `\uXXXX` |
+| dict → 对象 | `Model.model_validate(...)` | 把外部数据提升为带类型与校验的对象（本 stage 未用；留给 Structured Output / 框架阶段） |
+
+工具结果必须先 `json.dumps`：`role="tool"` 的 `content` 在协议里是 `str`，直接塞 dict 会被序列化层拒绝。
+
+**三条规则（所有脚本共用）**：
+
+1. **顺序与配平**：带 `tool_calls` 的 `assistant` 先于对应 `tool`；点几单就回几条，少一条 API 直接报错。
+2. **`messages` 是有状态历史**：每轮追加、不是替换（状态载体见 §4.2 / §4.3）。
+3. **模型不执行工具**：`tool_calls` 只是请求，执行在 `execute_tool`；工具返回内容属不可信输入。
+
+**与母题的关系**：规则 1 → M1（契约完整度），规则 2 → M4（循环依赖历史），规则 3 → M2（不可信输入）。
+
 ## 3. 术语增量
+
+> 按「从底层到上层」分六层：**数据形态 → 消息契约 → 工具边界 → Schema 说明书 → 循环观测 → 错误重试**。改义（`observation`）单独标注。
+
+### 3.1 数据形态层｜同一个值的三种载体
+> 决定「怎么取值、能不能校验」；转换点见 §2.4。→ 支撑 M1 / M4
+
+| 术语 | 本 stage 中的定义 | 与前序是否一致 | 首次出现 |
+|---|---|---|---|
+| `pydantic 对象` | OpenAI SDK 返回的结构（`ChatCompletion` / `ChatCompletionMessage` / `ChatCompletionMessageToolCall`），可用 `.attr` 取值、`.model_dump()` 转 dict | 新 | `hello_tool.py` `first` / `assistant` |
+| `model_dump()` | pydantic 方法：对象 → dict；`exclude_none=True` 丢弃值为 `None` 的字段 | 新 | `hello_tool.py` L93 |
+
+### 3.2 消息契约层｜模型与程序之间传什么
+> 配平与顺序的规则都在这一层。→ 支撑 M1
 
 | 术语 | 本 stage 中的定义 | 与前序是否一致 | 首次出现 |
 |---|---|---|---|
 | `tool_calls` | 模型返回的工具请求列表（含 `id`/`type`/`function`），是**请求**不是执行 | 一致 | `hello_tool.py` |
 | `tool_call_id` | `assistant.tool_calls[i].id` 与 `role="tool"` 消息的 `tool_call_id` 的配对键 | 一致 | `hello_tool.py` |
 | `finish_reason` | 本轮停止原因：`stop` / `tool_calls` / `length` 等；只有 `stop` 才算完整答案 | 一致（首次用于判断） | `starter3.py` `react_loop` |
+
+### 3.3 工具边界层｜谁能执行、结果是什么形态
+> 模型只能提议，执行与拒绝都在这一层。→ 支撑 M2 / M3
+
+| 术语 | 本 stage 中的定义 | 与前序是否一致 | 首次出现 |
+|---|---|---|---|
 | `allowlist` | 名字→函数的白名单表 `TOOL_IMPL`；派发只查表，不用 `globals()[name]()` | 一致 | `starter2.py` |
 | `observation` | 工具执行结果。**改义**：`starter2`/`starter3` 是 `str`（`"error: ..."`），`starter5` 起是 `dict` | **改义**（见左） | `starter2.py` → `starter5.py` |
+
+### 3.4 Schema 说明书层｜写给模型看的约束
+> 只管「模型能不能看懂该填什么」，不是程序的保证（见 §2.4、M2）。→ 支撑 M2 / M5
+
+| 术语 | 本 stage 中的定义 | 与前序是否一致 | 首次出现 |
+|---|---|---|---|
+| `required` | JSON Schema 必填字段列表 | 新 | `hello_tool.py` `TOOLS` |
+| `enum` | JSON Schema 枚举，收敛取值空间 | 新 | `hello_tool.py` `TOOLS` |
+| `additionalProperties` | JSON Schema 关键字，禁止多余字段 | 新 | `hello_tool.py` `TOOLS` |
+
+### 3.5 循环观测层｜跑几次、何时停、留下什么
+> 循环的产物不是"答案"，而是"可判读的结束状态 + 记录"。→ 支撑 M4
+
+| 术语 | 本 stage 中的定义 | 与前序是否一致 | 首次出现 |
+|---|---|---|---|
 | `trace` | 每轮可验证摘要：`step`/`assistant_text`/`tool`/`tool_input`/`obs`/`attempts`/`is_error` | 新 | `starter3.py` |
 | `truncated` | 是否撞 `max_iter` 或被 `length` 截断 | 新 | `starter3.py` |
 | `terminal_reason` | 非正常结束原因（`length` / `missing_tool_call` / `permanent_tool_error`） | 新 | `starter3.py` |
+
+### 3.6 错误与重试层｜错误分类与责任归属
+> 分类的目的是回答「谁处理」：程序重试 / 模型改参 / 程序立即停。→ 支撑 M3 / M3a
+
+| 术语 | 本 stage 中的定义 | 与前序是否一致 | 首次出现 |
+|---|---|---|---|
 | `bad_input` | 模型填错的错误类别，由验证层产生 | 新 | `starter5.py` `execute_tool` |
 | `transient` | 暂时性错误（超时/限流），程序可自动重试 | 新 | `starter5.py` `fetch_weather` |
 | `permanent` | 不可恢复错误（401/403），程序立即停止 | 新 | `starter5.py` `fetch_weather` |
 | `retry_hint` | 错误 dict 里给下一步的提示（给程序判断、也给模型改参） | 新 | `starter5.py` |
 | `attempts` | 同一次工具调用实际尝试次数（1=未重试） | 新 | `starter5.py` `call_tool_with_retry` |
-| `required` | JSON Schema 必填字段列表 | 新 | `hello_tool.py` `TOOLS` |
-| `enum` | JSON Schema 枚举，收敛取值空间 | 新 | `hello_tool.py` `TOOLS` |
-| `additionalProperties` | JSON Schema 关键字，禁止多余字段 | 新 | `hello_tool.py` `TOOLS` |
 
 ## 4. 逐脚本精读
 
 ### 4.1 `hello_tool.py`
 
-- **链路**：`messages=[user]`（L102）→ `client.chat.completions.create(tools=TOOLS)`（L107）→ `assistant = first.choices[0].message`（L113）→ 诊断 print 放在 `if assistant.tool_calls:` 内（L120）→ `messages.append(assistant.model_dump(exclude_none=True))`（L128）→ `for call in assistant.tool_calls or []` 验名验参 → `get_weather()` → `messages.append({"role":"tool","tool_call_id":call.id,...})`（L159）→ `if not assistant.tool_calls: raise RuntimeError`（L170）→ 第二次 `create`（L173）→ `messages.append(final_assistant.model_dump(...))`（L179）→ `assert`（L189-190）。
+- **链路**：`messages=[user]`（L67）→ `client.chat.completions.create(tools=TOOLS)`（L72）→ `assistant = first.choices[0].message`（L78）→ 诊断 print 放在 `if assistant.tool_calls:` 内（L85）→ `messages.append(assistant.model_dump(exclude_none=True))`（L93）→ `for call in assistant.tool_calls or []` 验名验参 → `get_weather()` → `messages.append({"role":"tool","tool_call_id":call.id,...})`（L124）→ `if not assistant.tool_calls: raise RuntimeError`（L135）→ 第二次 `create`（L138）→ `messages.append(final_assistant.model_dump(...))`（L144）→ `assert`（L154-155）。
 - **状态**：唯一状态是模块级 `messages`；没有 `trace`，没有循环。
 - **关键机制**：【你写的胶水】**回填—配对**：`assistant`（带 `tool_calls`）必须先进历史，`role="tool"` 结果才能靠 `tool_call_id` 认领。↔ 与 `starter3` 对照：同一回圈这里手写展开两次，`starter3` 用 `for step in range(max_iter)` 收进循环。
 - **边界/坑**：整段在模块顶层执行、无 `__main__` 守卫 → **不可 import、不可测**（`starter2` 第一处改进即是加函数与守卫）；诊断 print 若直接取 `tool_calls[0]`，模型不点单时先抛 `TypeError`、抢掉 `RuntimeError` 兜底（已修）。
@@ -141,7 +252,7 @@
 
 **【干扰项】** 常见误解是"模型调用工具后自己带回结果"，于是只 append 了 `tool_calls` 就发下一次请求，遇到 `400` 却去怀疑 prompt。
 
-**【定位】** `hello_tool.py` L107–L170（两次 `create` 与 `role="tool"` 回填）；`starter2.py` `run_tool_selection` 多单分支。
+**【定位】** `hello_tool.py` L72–L135（两次 `create` 与 `role="tool"` 回填，消息结构见 §2.4）；`starter2.py` `run_tool_selection` 多单分支。
 
 **【自评标准】** 能说出"请求 vs 执行"且能指出缺回执的后果 → M1 掌握；只答"要回填" → M1 部分缺口。
 
