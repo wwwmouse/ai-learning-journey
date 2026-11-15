@@ -44,7 +44,7 @@
 - **链路**：离线部分 `evaluate_arithmetic` → `calculator` 工具 → `run_json_tool_call`；真机部分 `run(question)` → `build_codeact_agent()` → `CodeAgent.run()` → `DockerExecutor` 在容器里执行 → `finally: agent.cleanup()`。
 - **状态**：无图、无显式 state；只有工具返回值与 `max_steps=4` 的步数上限。
 - **关键机制**：两条 action 路线。JSON tool 的边界在 `run_json_tool_call`（字段必须恰好 `{name, arguments}`、工具白名单、参数形状）；CodeAct 的边界在 `codeact_executor_config()`（`allow_pickle=False`、`host=127.0.0.1`、`network_mode="bridge"`、`cap_drop=["ALL"]`、`security_opt=["no-new-privileges"]`）。↔ 练习 1/3 都是 JSON tool 路线（模型只回工具调用）；这里让模型直接写代码。
-- **坑与边界**：模型代码一律不可信，不能在主机执行；`evaluate_arithmetic` 故意不用 `eval/exec`，只走 AST 白名单；容器仍可能连网，不是 production sandbox；`test_docker_smoke.py` 要先 `docker version` 成功；当前状态：离线 `test.py` 已通过，真机 CodeAct **未跑（Docker daemon 未启动）→ 待确认**。
+- **坑与边界**：模型代码一律不可信，不能在主机执行；`evaluate_arithmetic` 故意不用 `eval/exec`，只走 AST 白名单；容器仍可能连网，不是 production sandbox；`test_docker_smoke.py` 要先 `docker version` 成功。**本机实机已跳过**：Windows 下 Python 的 docker SDK 打不开 Docker Desktop 的命名管道（`CreateFile` 返回“拒绝访问”），所以只保留离线验证 + 读码；把模型代码真正送进容器这一层，等以后有可用 Docker 环境再补。
 
 ### 2.5 练习 5：类型安全 agent
 
@@ -126,7 +126,7 @@ write_task = Task(
 
 ## 7. 遗留问题 / 下个 stage 的钩子
 
-- **本 stage 故意没做**：持久化 checkpointer（`InMemorySaver` 进程退出即丢）、eval、预算/观测、并行分支；练习 4 的真机 CodeAct 未验证（Docker daemon 未启动）→ 待确认。
+- **本 stage 故意没做**：持久化 checkpointer（`InMemorySaver` 进程退出即丢）、eval、预算/观测、并行分支；练习 4 的实机 CodeAct 跳过（本机 Windows Docker 命名管道权限受限），只保留离线验证 + 读码，不影响本关其余结论。
 - **留给 Stage 5**：Claude Code 生态与 MCP——跨框架共享工具，正好接上"框架能不能混用"里"共享工具"那条。
 - **留给 Stage 6/7**：记忆与长期 checkpoint（Stage 6）、多 agent 上线/观测/恢复（Stage 7）。
-- **待确认**：qwen2.5:3b 在练习 4 的 CodeAct 上到底能走几步——依赖 Docker 环境实测。
+- **已搁置（非待确认）**：qwen2.5:3b 在练习 4 的 CodeAct 上能走几步——需要可用的 Docker 环境，本关跳过实测。

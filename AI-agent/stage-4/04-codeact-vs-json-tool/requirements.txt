@@ -1,4 +1,5 @@
-# Path A（本机 Ollama）：smolagents 本体 + Docker 执行器 extra。
-# 课程原版还有 litellm —— 那是给 Path B（Anthropic）用的，本机用不到。
-# 真机跑 starter.py / test_docker_smoke.py 需要 Docker daemon 在运行（Docker Desktop 已装，当前未启动）。
-smolagents[docker]>=1.26,<2.0
+# Path A（本机 Ollama）：smolagents 本体 + Docker 执行器 + openai 客户端。
+# 课程原版用 litellm（Path B/Anthropic 用），litellm 会顺带装 openai；
+# 我们只用 Path A，所以直接声明 openai，避免漏包。
+# 真机跑 starter.py / test_docker_smoke.py 还需要 Docker daemon 在运行。
+smolagents[docker,openai]>=1.26,<2.0

@@ -18,11 +18,20 @@ sandbox。两条路都设有步数与输入边界。
       - 这题是「CodeAct」路线：模型直接写 Python 代码，由沙箱执行；
       - 两条路都要「边界」：JSON 路线靠参数校验，CodeAct 路线靠 Docker 沙箱。
 
+【本机怎么用这份脚本】（重要）
+    本机 Docker 的命名管道权限受限（CreateFile 报“拒绝访问”），真机 CodeAct 暂时跳过；
+    这份脚本保留下来用于**阅读分析**，配合离线验证 test.py 使用。建议按顺序读：
+        1) evaluate_arithmetic：为什么不用 eval/exec；三道上限（长度/AST 节点/数值）各防什么；
+        2) run_json_tool_call：JSON 路线的边界为什么放在参数校验；
+        3) codeact_executor_config：最小权限为什么这样配，还差什么才算 production sandbox；
+        4) build_codeact_agent / run：模型代码在哪被执行、max_steps 与 cleanup() 各自的作用。
+    真机部分（需要 Docker + Ollama）留到以后有环境再补，不影响其余四题。
+
 【跑法】VS Code 集成终端（PowerShell）。
     离线验证（不需要 Docker，先跑这个）：
         cd E:\VScode\AI-learning\AI-agent\stage-4\04-codeact-vs-json-tool
         .\.venv\Scripts\python.exe test.py
-    真机 CodeAct（需要 Docker daemon + Ollama）：
+    真机 CodeAct（需要 Docker daemon + Ollama；本机暂跳过，命令备用）：
         ollama serve                                  # 另开一个终端
         启动 Docker Desktop（Linux 容器），确认 docker version 成功
         .\.venv\Scripts\python.exe test_docker_smoke.py   # 先验证沙箱通道
