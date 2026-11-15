@@ -86,6 +86,7 @@
 
 ## 6. 自测题
 
+### 6.1 题目
 **概念辨析**
 
 1. `Process.sequential` 和 `add_conditional_edges` 解决的是同一个问题吗？
@@ -123,6 +124,52 @@ write_task = Task(
 
 6. 若要给练习 3 加"两级审批"（先经理、后法务），你会改哪一层？需要几个 `interrupt()`、几次 `resume`？
 7. 若换成更强的模型，练习 5 的 `build_agent` 里哪段可以删？为什么？
+
+### 6.2 参考答案（含推理与常见错误）
+
+> 判分标准：每题能说出「答案 + 为什么」才算过；只给结论不算。
+
+**Q1. `Process.sequential` 和 `add_conditional_edges` 解决的是同一个问题吗？**
+
+- 答案：不是。`Process.sequential` 是 CrewAI 的**多任务拓扑**（按 `tasks` 列表顺序跑，不可分支）；`add_conditional_edges` 是 LangGraph 的**边路由零件**（路由函数决定下一站，可分支也可成环）。
+- 推理：两者不在一个抽象层——一个是"预置形状"，一个是"拼形状的积木"。`sequential` 的效果约等于一串固定 `add_edge`；`conditional_edges` 相当于"可编程的 if/else"。它们也不互斥：一个图节点里完全可以跑一个 sequential crew。
+- 常见错误：把 `sequential` 当 workflow graph（它没有分支/存档/HITL）；以为 `conditional_edges` 负责多 agent 协作（它只管图内路由）；以为二者只能二选一。
+
+**Q2. `interrupt()` 和 `return` 在控制流上有何区别？为什么恢复必须用 `Command(resume=...)`？**
+
+- 答案：`return` 是"节点算完，把状态更新交给下游"；`interrupt()` 是"暂停整张图，把 payload 交给调用者，并把 state 存进 checkpoint"。恢复必须带 `Command(resume=值)`，因为框架不知道人的决定是什么，需要这个值去填挂起的 `interrupt()`。
+- 推理：恢复时被中断的节点会**从头重新执行**，`interrupt()` 那次调用才返回 resume 值。所以副作用（发邮件、写库）不能放在 `interrupt()` 之前；同一 `thread_id` 才能找回挂起的存档。
+- 常见错误：用普通 `invoke({"query": ...})` 当恢复（会重跑并再次暂停，实测拿不到 final）；忘记 checkpointer（抛 `RuntimeError: Cannot use Command(resume=...) without checkpointer`）；换 `thread_id`（`KeyError`/从头跑）；在图外直接调用 `interrupt()`（会报错）。
+
+**Q3. `Field(ge=0, le=1)` 和 `@field_validator` 各管什么？只用前者会漏哪种坏数据？**
+
+- 答案：`Field` 管**声明式约束**（类型、范围、长度）；`field_validator` 管**自定义语义**。只用前者会漏掉「长度合法但内容无意义」的值，例如 `" "`（`min_length=1` 能过）。
+- 推理：Pydantic 在构造/validate 时依次执行两者；`Field` 无法表达 strip、跨字段、白名单等逻辑。
+- 常见错误：以为 `min_length` 能挡全空白；把复杂逻辑硬塞进 `Field`；以为 validator 能证明"内容真实"（不能）；默认 `validate_assignment=False`，构造后再改字段不会重新校验。
+
+**Q4. 为什么 `review_node` 不能写成 `return {"approved": False}`？**
+
+- 答案：`return` 会让节点立即结束、继续走到 `final`，等于**程序自己替人做了决定**；`interrupt()` 才是"暂停 + 等外部决定"，`approved` 的值必须来自 resume。
+- 推理：HITL 的价值在"停下来"——没有 `interrupt` 就没有 `__interrupt__`，也没有暂停点和存档。
+- 常见错误：把 `interrupt()` 当成 `input()`（它不读终端，是控制流暂停）；用默认值兜底"避免卡住"（等于没做 HITL）；用 `try/except` 吞掉中断信号；把 `interrupt` 放在循环里却不给每次恢复准备一个 resume。
+
+**Q5. 去掉 `write_task` 的 `context=[research_task]` 会怎样？**
+
+- 答案：框架不再把 research 的输出注入 Writer 的 prompt，Writer 只剩自己的任务描述，草稿更容易空泛/幻觉；`test.py` 里 `crew.tasks[1].context == [crew.tasks[0]]` 会失败。
+- 推理：`Process.sequential` 只保证**顺序**，不保证**数据**；`context` 才是数据通道，`Crew` 不会默认把上一个 task 的输出塞给下一个。
+- 常见错误：以为顺序=自动传数据；以为 `context` 只是注释；指望 `simulate_handoff` 测出这个丢失（它是纯函数，测不出；结构要靠 `test.py` 的断言）。
+
+**Q6. 加"两级审批"（经理 → 法务）要改哪一层？几次 interrupt / resume？**
+
+- 答案：改 `review_node` 这一层——拆成 `review_manager`、`review_legal` 两个节点各一次 `interrupt()`（或在同一节点里连续两次，不推荐）；正常路径 **2 次 interrupt、2 次 resume**；第一次被拒就短路，只 1 次 resume。
+- 推理：每次 `interrupt` 需要一个匹配的 resume；两次决策都要写进 `State`（如 `manager_ok`、`legal_ok`），拒绝时路由到 `final`（REJECTED）或单独的修订分支；全程同一个 `thread_id`。
+- 常见错误：一个节点塞两个 interrupt 却只发一次 resume；跳过第一次的审批结果直接进入第二次；拒绝后仍继续审批；换 `thread_id`；进程重启后 `InMemorySaver` 丢失导致恢复失败。
+
+**Q7. 换成更强的模型后，`build_agent` 里哪段可以删？**
+
+- 答案：可以删掉 `NativeOutput` 的整套切换逻辑（`from pydantic_ai.output import NativeOutput`、`isinstance(chosen, TestModel)` 分支），回到 `output_type=AnswerWithConfidence`（默认 ToolOutput）。`retries` 和 validator **不建议删**。
+- 推理：现在保留切换，是因为 qwen2.5:3b 用默认 ToolOutput 会超重试、而 `TestModel` 不支持 `NativeOutput`；强模型若稳定支持 tool calling / JSON schema，两个分支都可以去掉。但不同 provider 的支持度不一样 → 待确认，换模型后要实测。
+- 常见错误：以为"模型更强 = 不需要 schema/校验"（下游仍要契约）；连 `retries` 一起删（瞬时失败仍会重试）；删 validator（语义规则和模型强弱无关）。
 
 ## 7. 遗留问题 / 下个 stage 的钩子
 
