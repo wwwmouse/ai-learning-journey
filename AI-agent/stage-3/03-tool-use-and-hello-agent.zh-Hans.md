@@ -58,7 +58,7 @@ ReAct 会交替决定下一步、采取 action、查看 observation，再继续�
 
 模型直接返回固定形状的数据，例如符合 schema 的 JSON。就像把答案填进表格。本章用它和 Function Calling 对照：前者要数据，后者要程序采取动作。即使外形合法，内容仍可能错误、被拒答或被截断。
 
-![Tool Use 六步图：模型提出 Tool Call，程序验证并执行，再把 Tool Result 送回模型。](../resources/diagrams/tool-use-loop.zh-Hans.png)
+![Tool Use 六步图：模型提出 Tool Call，程序验证并执行，再把 Tool Result 送回模型。](diagrams/tool-use-loop.zh-Hans.png)
 
 ## 先选对方法
 

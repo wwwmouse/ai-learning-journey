@@ -45,7 +45,7 @@
 
 ## 🗺️ 先看一张选择地图
 
-![Agent 系统选择图：先分辨由程序或 Agent 决定下一步，再看需要一个或多个 Agent，最后先选最简单能完成任务的形状](../resources/diagrams/agent-framework-choice-map.zh-Hans.png)
+![Agent 系统选择图：先分辨由程序或 Agent 决定下一步，再看需要一个或多个 Agent，最后先选最简单能完成任务的形状](diagrams/agent-framework-choice-map.zh-Hans.png)
 
 先问两题：**谁决定下一步？需要几个 Agent？** 如果固定路线已经能完成，就停在左上角；多一个 Agent 会多一份 context、测试与失败方式。
 
